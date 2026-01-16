@@ -1,16 +1,23 @@
 # DHBootlegToolkit
 
-A macOS application for managing translation keys and S3 feature configuration. Built with Swift 6, SwiftUI, and modern concurrency patterns.
+A macOS application providing integrated tools for stock market monitoring, localization management, and S3 feature configuration. Built with Swift 6, SwiftUI, and modern concurrency patterns.
 
 ## Overview
 
-DHBootlegToolkit provides two integrated editor modules with shared Git workflow:
+DHBootlegToolkit provides four integrated modules with shared Git workflow:
+
+**Market Watch (Stock Ticker):**
+- Real-time stock price tracking with WebSocket connections
+- Dynamic sentiment analysis with adaptive thresholds
+- Interactive charts with multiple time ranges (1D to All)
+- Market statistics and trading hours display
 
 **Localization Editor:**
 - Feature-based navigation for translation keys organized by feature folders
 - Multi-platform support for mobile and web localization files
 - Multi-tab editor for translation keys, images, and text files
 - New key wizard with screenshot attachment
+- Fixed bottom toolbar with liquid glass styling for always-visible save/discard actions
 
 **S3 Feature Config Editor:**
 - Country-level configuration editing with search/filter
@@ -18,13 +25,32 @@ DHBootlegToolkit provides two integrated editor modules with shared Git workflow
 - JSON schema validation
 - Field promotion and bulk application across countries
 
+**Logger:**
+- Operation logs and timing information (placeholder for future implementation)
+
 **Shared Capabilities:**
 - Git integration - Create branches, commit changes, and open PRs directly
 - External change detection with conflict resolution
+- Native macOS window title bar integration
 
 ## Getting Started
 
-### Prerequisites
+### Installation
+
+Install via Homebrew Cask:
+
+```bash
+# Add the tap
+brew tap lromyl/tap
+
+# Install the cask
+brew install --cask dhbootlegtoolkit
+
+# Or in one command:
+brew install --cask lromyl/tap/dhbootlegtoolkit
+```
+
+### Prerequisites (Building from Source)
 
 - macOS 15+ (Sequoia)
 - Xcode 16+
@@ -95,6 +121,7 @@ A reusable Swift Package providing business logic, located at `DHBootlegToolkitC
 |-------|---------|
 | `FeatureFolder`, `TranslationEntity` | Localization data structures |
 | `S3CountryConfig`, `S3Environment` | S3 feature config data structures |
+| `StockData`, `StockSymbol` | Stock market data structures |
 | `GitStatus`, `GitFileStatus` | Git state representation |
 | `EntityDiff`, `EntityChangeStatus` | Change tracking for diff display |
 
@@ -110,11 +137,43 @@ A reusable Swift Package providing business logic, located at `DHBootlegToolkitC
 
 ## App Modules
 
-The application contains two main editor modules, accessible via sidebar tabs.
+The application contains four main modules, accessible via sidebar tabs.
+
+### Market Watch (Stock Ticker)
+
+**Location:** `DHBootlegToolkit/Views/StockTicker/`
+**State Container:** `StockTickerStore.swift`
+
+Real-time stock market monitoring with sentiment analysis.
+
+**Key Features:**
+- Real-time price tracking via WebSocket connections
+- Dynamic sentiment thresholds based on historical volatility
+- Interactive price charts with 11 time ranges (1D, 1W, 1M, 3M, 6M, YTD, 1Y, 2Y, 5Y, 10Y, All)
+- Market statistics grid (open, high, low, volume, P/E, market cap)
+- Trading hours display with market status indicator
+- Sentiment categories: Moonshot 🚀, Gains 📈, Flat 😐, Losses 📉, Crash 💥
+
+**Key Files:**
+| File | Purpose |
+|------|---------|
+| `StockTickerDetailView.swift` | Main detail view with price card, thresholds, and charts |
+| `StockPriceCard.swift` | Price display with trading hours and connection status |
+| `SentimentThresholdLegend.swift` | Dynamic threshold display with color indicators |
+| `StockChartView.swift` | Interactive Swift Charts implementation with range selection |
+| `MarketStatsGrid.swift` | Market statistics display |
+| `StockTickerBrowserView.swift` | Sidebar stock list navigation |
+
+**Chart Features:**
+- Hover to inspect price at specific time
+- Drag to select range and view change statistics
+- Smooth catmull-rom interpolation
+- Adaptive axis labels based on time range
+- Color-coded sentiment overlay on range selection
 
 ### Localization Editor
 
-**Location:** `DHBootlegToolkit/Views/Editor/`
+**Location:** `DHBootlegToolkit/Views/LocalizationEditor/`
 **State Container:** `AppStore.swift` (~1600 lines)
 
 Edit translation keys for mobile and web platforms.
@@ -125,19 +184,26 @@ Edit translation keys for mobile and web platforms.
 - Platform selection (mobile/web) per feature
 - External change detection with conflict resolution dialogs
 - File-level git status badges (`[A]` Added, `[M]` Modified, `[-]` Deleted)
+- Fixed bottom toolbar with liquid glass styling for always-visible save/discard buttons
 
 **Key Files:**
 | File | Purpose |
 |------|---------|
 | `DetailTabView.swift` | Multi-tab container with new key wizard |
-| `TranslationDetailView.swift` | Individual translation key editor |
+| `TranslationDetailView.swift` | Individual translation key editor with fixed toolbar |
 | `TranslationListView.swift` | List of translation keys per feature |
 | `TextTabView.swift` | Text/JSON file previewer |
 | `ImageTabView.swift` | Image preview viewer |
 
+**UI Improvements:**
+- `.ultraThinMaterial` background for liquid glass toolbar effect
+- Prominent save button with glow shadow when enabled
+- Keyboard shortcut (⌘S) for quick save
+- Bottom padding to prevent content from being hidden behind toolbar
+
 ### S3 Feature Config Editor
 
-**Location:** `DHBootlegToolkit/Views/S3Editor/`
+**Location:** `DHBootlegToolkit/Views/S3FeatureConfigEditor/`
 **State Container:** `S3Store.swift`
 
 Edit feature configuration stored in S3 JSON format.
@@ -167,18 +233,24 @@ DHBootlegToolkitApp (@main entry)
     └── MainSplitView (NavigationSplitView - 3 pane layout)
         ├── Sidebar (left column)
         │   └── SidebarView
+        │       ├── Tab: .stockTicker → StockTickerBrowserView
+        │       │   └── Stock list with live prices
         │       ├── Tab: .editor → FeatureBrowserView
         │       │   └── Feature tree with file items and git badges
         │       ├── Tab: .s3Editor → S3BrowserView
         │       │   └── Country list with environment toggle
-        │       └── Tab: .logs → LogsView
-        │           └── Operation logs and timing
+        │       └── Tab: .logs → LogsPlaceholderView
+        │           └── Coming soon placeholder
         │
-        ├── Detail (center/right)
+        ├── Detail (center/right) - Title changes based on module
+        │   ├── When .stockTicker: StockTickerDetailView
+        │   │   └── Price card, sentiment thresholds, charts
         │   ├── When .editor: DetailTabView
         │   │   └── Multi-tab translation key editing
-        │   └── When .s3Editor: S3DetailView
-        │       └── JSON tree editor for configs
+        │   ├── When .s3Editor: S3DetailView
+        │   │   └── JSON tree editor for configs
+        │   └── When .logs: LogsPlaceholderView
+        │       └── Empty state
         │
         └── GitStatusBar (bottom toolbar, shared)
             ├── Branch selector dropdown
@@ -187,14 +259,74 @@ DHBootlegToolkitApp (@main entry)
             └── Create PR / Publish button
 ```
 
+### Native Window Title Integration
+
+The app uses native macOS window title bar with dynamic titles:
+- **Market Watch** - Stock Ticker module
+- **Not WebTranslateIt Editor** - Localization module
+- **S3 Feature Config Editor** - S3 Config module
+- **Logger** - Logs module
+
 ### View Hierarchy
 
 | View | Location | Purpose |
 |------|----------|---------|
 | `MainSplitView` | `Views/MainSplitView.swift` | Primary 3-pane layout with git bar |
 | `SidebarView` | `Views/Sidebar/SidebarView.swift` | Tab navigation and module switching |
-| `FeatureBrowserView` | `Views/Sidebar/FeatureBrowserView.swift` | Feature tree for localization |
-| `S3BrowserView` | `Views/S3Editor/S3BrowserView.swift` | Country list for S3 configs |
+| `StockTickerBrowserView` | `Views/StockTicker/Sidebar/` | Stock list for market watch |
+| `FeatureBrowserView` | `Views/LocalizationEditor/` | Feature tree for localization |
+| `S3BrowserView` | `Views/S3FeatureConfigEditor/` | Country list for S3 configs |
+
+---
+
+## Stock Ticker Architecture
+
+### Real-Time Data Flow
+
+```mermaid
+flowchart LR
+    WS[WebSocket Connection]
+    Store[StockTickerStore]
+    Price[Price Card]
+    Chart[Chart View]
+    Sentiment[Sentiment Display]
+
+    WS -->|Price Update| Store
+    Store -->|Update State| Price
+    Store -->|Fetch History| Chart
+    Store -->|Calculate| Sentiment
+```
+
+### Sentiment Calculation
+
+**Dynamic Thresholds:**
+Based on historical volatility calculated from price data:
+
+```swift
+volatility = standardDeviation(returns) * volatilityMultiplier
+```
+
+**Sentiment Categories:**
+- **Moonshot** 🚀: Change ≥ +moonshot threshold (e.g., +5%)
+- **Gains** 📈: Between +gainsLower and +moonshot
+- **Flat** 😐: Within ±flat range
+- **Losses** 📉: Between -lossesLower and -flatLower
+- **Crash** 💥: Change ≤ crash threshold (e.g., -5%)
+
+**Threshold Source:**
+- **Fixed**: Baseline thresholds (±5%, ±1%, ±0.5%)
+- **Dynamic**: Adjusted based on 3-month volatility ratio
+
+### Chart Time Ranges
+
+| Range | X-Axis Stride | X-Axis Format | Use Case |
+|-------|---------------|---------------|----------|
+| 1D | Hour | Hour (HH:00) | Intraday trading |
+| 1W | Day | Weekday (Mon, Tue) | Weekly patterns |
+| 1M | Week | Day (16, 23, 30) | Monthly trends |
+| 3M/6M | Month | Month + Day (Jan 15) | Quarterly analysis |
+| YTD/1Y | Month | Month (Jan, Feb) | Yearly performance |
+| 2Y+ | Year | Year (2024, 2025) | Long-term trends |
 
 ---
 
@@ -202,7 +334,7 @@ DHBootlegToolkitApp (@main entry)
 
 ### Git Status Bar
 
-Located in `MainSplitView.swift`, shared across both modules.
+Located in `MainSplitView.swift`, shared across all modules.
 
 **Displays:**
 - Current branch name with dropdown selector
@@ -212,6 +344,7 @@ Located in `MainSplitView.swift`, shared across both modules.
 **Actions:**
 - Switch branches (with unsaved changes protection)
 - Create new branch from current
+- Commit changes with auto-generated message
 - Publish PR via GitHub CLI
 
 ### Git Worker
@@ -241,15 +374,15 @@ Parses `git status --porcelain` output to determine file states:
 ```mermaid
 flowchart LR
     Edit[User edits file]
-    Track[AppStore/S3Store tracks change]
+    Track[Store tracks change]
     Badge[Status bar shows count]
-    PR[User clicks Create PR]
-    Branch[GitWorker creates branch]
-    Commit[GitWorker commits files]
-    Push[GitWorker pushes to remote]
-    GH[GitHub CLI opens PR]
+    Commit[User clicks Commit]
+    Branch[GitWorker checks branch]
+    Stage[GitWorker stages files]
+    Push[GitWorker commits & pushes]
+    PR[User creates PR via gh CLI]
 
-    Edit --> Track --> Badge --> PR --> Branch --> Commit --> Push --> GH
+    Edit --> Track --> Badge --> Commit --> Branch --> Stage --> Push --> PR
 ```
 
 ---
@@ -258,7 +391,7 @@ flowchart LR
 
 ### WizardStep (New Translation Key Flow)
 
-Location: `DHBootlegToolkit/Views/Editor/DetailTabView.swift`
+Location: `DHBootlegToolkit/Views/LocalizationEditor/DetailTabView.swift`
 
 ```mermaid
 stateDiagram-v2
@@ -329,22 +462,37 @@ DHBootlegToolkit/
 ├── DHBootlegToolkitCore/                    # Reusable Swift Package
 │   ├── Package.swift
 │   └── Sources/DHBootlegToolkitCore/
-│       ├── Workers/                       # GitWorker, FileSystemWorker, DiffWorker
-│       ├── Models/                        # FeatureFolder, TranslationEntity, S3CountryConfig
-│       └── Configuration/                 # RepositoryConfiguration, EntitySchema
+│       ├── Workers/                         # GitWorker, FileSystemWorker, DiffWorker
+│       ├── Models/                          # FeatureFolder, TranslationEntity, StockData
+│       └── Configuration/                   # RepositoryConfiguration, EntitySchema
 │
-├── DHBootlegToolkit/                    # macOS SwiftUI App
-│   ├── App/DHBootlegToolkitApp.swift    # @main entry point
-│   ├── ViewModels/                        # AppStore, S3Store, LogStore
+├── DHBootlegToolkit/                        # macOS SwiftUI App
+│   ├── App/DHBootlegToolkitApp.swift        # @main entry point
+│   ├── ViewModels/                          # State containers
+│   │   ├── AppStore.swift                   # Localization editor state
+│   │   ├── S3Store.swift                    # S3 config editor state
+│   │   ├── StockTickerStore.swift           # Stock ticker state
+│   │   ├── JSONTreeViewModel.swift          # JSON tree navigation
+│   │   └── LogStore.swift                   # Operation logging
 │   ├── Views/
-│   │   ├── MainSplitView.swift            # Primary layout + git bar
-│   │   ├── Sidebar/                       # SidebarView, FeatureBrowserView
-│   │   ├── Editor/                        # Localization Editor module
-│   │   └── S3Editor/                      # S3 Feature Config Editor module
-│   └── Models/                            # EditorTab, LogEntry
+│   │   ├── MainSplitView.swift              # Primary layout + git bar
+│   │   ├── Components/                      # Shared components (GitStatusBar, etc.)
+│   │   ├── Sidebar/                         # SidebarView with 4 tabs
+│   │   ├── StockTicker/                     # Stock Ticker module
+│   │   │   ├── StockTickerDetailView.swift
+│   │   │   ├── Components/                  # Price card, charts, sentiment
+│   │   │   └── Sidebar/                     # Stock list browser
+│   │   ├── LocalizationEditor/              # Localization Editor module
+│   │   │   ├── DetailTabView.swift          # Tab container + wizard
+│   │   │   ├── TranslationDetailView.swift  # Key editor with fixed toolbar
+│   │   │   └── Components/                  # List, form, preview views
+│   │   └── S3FeatureConfigEditor/           # S3 Config Editor module
+│   │       ├── S3DetailView.swift           # JSON tree editor
+│   │       └── Components/                  # Browser, sheets, tree views
+│   └── Models/                              # EditorTab, LogEntry
 │
-├── DHBootlegToolkitTests/               # Unit tests
-├── project.yml                            # XcodeGen configuration
+├── DHBootlegToolkitTests/                   # Unit tests
+├── project.yml                              # XcodeGen configuration
 └── README.md
 ```
 
@@ -359,6 +507,7 @@ DHBootlegToolkit/
 - **@Observable** pattern for SwiftUI state management
 - **Protocol-based configuration** for extensibility
 - **Nonisolated methods** where parallel execution is safe
+- **Native macOS UI patterns** (liquid glass, materials, toolbars)
 
 ### Key Patterns
 
@@ -379,6 +528,20 @@ The `FileSystemWorker` manually builds JSON to preserve key order, which is impo
 **External Change Detection:**
 File hashes (prefix + suffix + length) are cached and compared on app focus to detect concurrent edits.
 
+**Liquid Glass UI:**
+```swift
+.background(.ultraThinMaterial)  // Translucent frosted glass
+.background(.bar)                // System toolbar material
+```
+
+**Swift Charts Integration:**
+Uses Swift Charts with:
+- `AreaMark` for gradient fills
+- `LineMark` for price lines
+- `PointMark` for selection indicators
+- `RuleMark` for range selection
+- Catmull-Rom interpolation for smooth curves
+
 ### Testing
 
 ```bash
@@ -388,6 +551,57 @@ swift test
 
 # Run app tests via Xcode
 xcodebuild test -scheme DHBootlegToolkitTests
+```
+
+---
+
+## UI Design Patterns
+
+### Fixed Bottom Toolbars
+
+Translation editor uses fixed bottom toolbar pattern:
+```swift
+VStack(spacing: 0) {
+    ScrollView {
+        // Form content
+    }
+
+    // Fixed toolbar
+    HStack {
+        Button("Discard") { }
+        Spacer()
+        Button("Save") { }
+    }
+    .padding(.horizontal, 20)
+    .padding(.vertical, 14)
+    .background(.ultraThinMaterial)  // Liquid glass effect
+}
+```
+
+### Equal Height Layouts
+
+Stock ticker price card and thresholds:
+```swift
+HStack(alignment: .top, spacing: 20) {
+    StockPriceCard()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+    SentimentThresholdLegend()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+}
+```
+
+### Chart Axis Configuration
+
+```swift
+.chartXAxis {
+    AxisMarks(values: .stride(by: xAxisStride())) { _ in
+        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
+            .foregroundStyle(.secondary.opacity(0.3))
+        AxisValueLabel(format: xAxisFormat())
+            .font(.caption2)
+    }
+}
 ```
 
 ---
