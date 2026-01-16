@@ -1,0 +1,497 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		4440F7313AC1135B5520A24B /* DHBootlegToolkitCore in Frameworks */ = {isa = PBXBuildFile; productRef = D5FDF42D874FB8B6C0FA849D /* DHBootlegToolkitCore */; };
+		450F065EDF880718587D1E2B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 134AB6E4966C19E0594957A5 /* Assets.xcassets */; };
+		ED8C29D999E8E78FE30EBC18 /* DHBootlegToolkitCore in Frameworks */ = {isa = PBXBuildFile; productRef = 6F101BE4C58885EED4986F8B /* DHBootlegToolkitCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		9A6D25CE6B566E995EC3044D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C506A53846F9A4BF7EE03067 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 35B49C79EE947F627B7B1743;
+			remoteInfo = DHBootlegToolkit;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		134AB6E4966C19E0594957A5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Assets.xcassets; path = DHBootlegToolkit/Assets.xcassets; sourceTree = SOURCE_ROOT; };
+		785077D8848C697F302ECB92 /* DHBootlegToolkit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DHBootlegToolkit.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BAA2DCA7F7056296BC5693CD /* DHBootlegToolkitCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = DHBootlegToolkitCore; path = DHBootlegToolkitCore; sourceTree = SOURCE_ROOT; };
+		FFC14A82C043842B140C07FD /* DHBootlegToolkitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DHBootlegToolkitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		3AA772A3E8399CFAEDC4BCB0 /* DHBootlegToolkit */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = DHBootlegToolkit;
+			sourceTree = "<group>";
+		};
+		A8F44DA43F2C720675EC1F0A /* DHBootlegToolkitTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = DHBootlegToolkitTests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		348E1120E7C8E898C33EDBF9 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				ED8C29D999E8E78FE30EBC18 /* DHBootlegToolkitCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CB62CDCFF4C17B27ED5ECBCA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4440F7313AC1135B5520A24B /* DHBootlegToolkitCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2E12865AF69D5C687744DFFA /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				785077D8848C697F302ECB92 /* DHBootlegToolkit.app */,
+				FFC14A82C043842B140C07FD /* DHBootlegToolkitTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		3E05157793DB14D3DA06CC96 = {
+			isa = PBXGroup;
+			children = (
+				3AA772A3E8399CFAEDC4BCB0 /* DHBootlegToolkit */,
+				A8F44DA43F2C720675EC1F0A /* DHBootlegToolkitTests */,
+				43E29789F087B26EB64E0527 /* DHBootlegToolkit */,
+				5339C0F16C50AE8E2345321C /* Packages */,
+				2E12865AF69D5C687744DFFA /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		43E29789F087B26EB64E0527 /* DHBootlegToolkit */ = {
+			isa = PBXGroup;
+			children = (
+				134AB6E4966C19E0594957A5 /* Assets.xcassets */,
+			);
+			path = DHBootlegToolkit;
+			sourceTree = "<group>";
+		};
+		5339C0F16C50AE8E2345321C /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				BAA2DCA7F7056296BC5693CD /* DHBootlegToolkitCore */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		35B49C79EE947F627B7B1743 /* DHBootlegToolkit */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4ADC3533C6F1283F7CA40EF7 /* Build configuration list for PBXNativeTarget "DHBootlegToolkit" */;
+			buildPhases = (
+				E5FBB14AEAC0BC2F5847FB10 /* Sources */,
+				90F6F6B2697900ABF53A1054 /* Resources */,
+				348E1120E7C8E898C33EDBF9 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				3AA772A3E8399CFAEDC4BCB0 /* DHBootlegToolkit */,
+			);
+			name = DHBootlegToolkit;
+			packageProductDependencies = (
+				6F101BE4C58885EED4986F8B /* DHBootlegToolkitCore */,
+			);
+			productName = DHBootlegToolkit;
+			productReference = 785077D8848C697F302ECB92 /* DHBootlegToolkit.app */;
+			productType = "com.apple.product-type.application";
+		};
+		BD1D45259BA14C00E7FE5DE7 /* DHBootlegToolkitTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5CF8ECF4ADEB625A41FD1D7B /* Build configuration list for PBXNativeTarget "DHBootlegToolkitTests" */;
+			buildPhases = (
+				CA1A8BFF25A595AE1AD755A0 /* Sources */,
+				CB62CDCFF4C17B27ED5ECBCA /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				31D270F9C746E763F9B4067C /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A8F44DA43F2C720675EC1F0A /* DHBootlegToolkitTests */,
+			);
+			name = DHBootlegToolkitTests;
+			packageProductDependencies = (
+				D5FDF42D874FB8B6C0FA849D /* DHBootlegToolkitCore */,
+			);
+			productName = DHBootlegToolkitTests;
+			productReference = FFC14A82C043842B140C07FD /* DHBootlegToolkitTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C506A53846F9A4BF7EE03067 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					35B49C79EE947F627B7B1743 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Manual;
+					};
+					BD1D45259BA14C00E7FE5DE7 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Manual;
+					};
+				};
+			};
+			buildConfigurationList = AB7BCAA7C5C409106C9E05A8 /* Build configuration list for PBXProject "DHBootlegToolkit" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 3E05157793DB14D3DA06CC96;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C55F11622091EFA7082ECB91 /* XCLocalSwiftPackageReference "DHBootlegToolkitCore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				35B49C79EE947F627B7B1743 /* DHBootlegToolkit */,
+				BD1D45259BA14C00E7FE5DE7 /* DHBootlegToolkitTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		90F6F6B2697900ABF53A1054 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				450F065EDF880718587D1E2B /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		CA1A8BFF25A595AE1AD755A0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E5FBB14AEAC0BC2F5847FB10 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		31D270F9C746E763F9B4067C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 35B49C79EE947F627B7B1743 /* DHBootlegToolkit */;
+			targetProxy = 9A6D25CE6B566E995EC3044D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0610FDC6EF064C3ADE29FE0D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.dhbootlegtoolkit.app.tests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DHBootlegToolkit.app/Contents/MacOS/DHBootlegToolkit";
+			};
+			name = Release;
+		};
+		376748E38D4A7D6683B92F7D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = DHBootlegToolkit/Resources/DHBootlegToolkit.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DHBootlegToolkit/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.dhbootlegtoolkit.app;
+				PRODUCT_MODULE_NAME = DHBootlegToolkit;
+				PRODUCT_NAME = DHBootlegToolkit;
+				SDKROOT = macosx;
+				SKIP_INSTALL = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
+		500596E820889486D3928DFE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = DHBootlegToolkit/Resources/DHBootlegToolkit.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DHBootlegToolkit/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.dhbootlegtoolkit.app;
+				PRODUCT_MODULE_NAME = DHBootlegToolkit;
+				PRODUCT_NAME = DHBootlegToolkit;
+				SDKROOT = macosx;
+				SKIP_INSTALL = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		7A2A22921AF0C00A56FE3368 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		A33DE9C3017C4C8A9595373B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.dhbootlegtoolkit.app.tests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DHBootlegToolkit.app/Contents/MacOS/DHBootlegToolkit";
+			};
+			name = Debug;
+		};
+		E202D167A163DF9485E2A213 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4ADC3533C6F1283F7CA40EF7 /* Build configuration list for PBXNativeTarget "DHBootlegToolkit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				500596E820889486D3928DFE /* Debug */,
+				376748E38D4A7D6683B92F7D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		5CF8ECF4ADEB625A41FD1D7B /* Build configuration list for PBXNativeTarget "DHBootlegToolkitTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A33DE9C3017C4C8A9595373B /* Debug */,
+				0610FDC6EF064C3ADE29FE0D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		AB7BCAA7C5C409106C9E05A8 /* Build configuration list for PBXProject "DHBootlegToolkit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E202D167A163DF9485E2A213 /* Debug */,
+				7A2A22921AF0C00A56FE3368 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		C55F11622091EFA7082ECB91 /* XCLocalSwiftPackageReference "DHBootlegToolkitCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = DHBootlegToolkitCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		6F101BE4C58885EED4986F8B /* DHBootlegToolkitCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DHBootlegToolkitCore;
+		};
+		D5FDF42D874FB8B6C0FA849D /* DHBootlegToolkitCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DHBootlegToolkitCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = C506A53846F9A4BF7EE03067 /* Project object */;
+}

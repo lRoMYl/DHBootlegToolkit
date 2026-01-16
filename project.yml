@@ -1,0 +1,68 @@
+name: DHBootlegToolkit
+options:
+  bundleIdPrefix: com.dhbootlegtoolkit
+  deploymentTarget:
+    macOS: "26.0"
+  xcodeVersion: "16.0"
+  minimumXcodeGenVersion: "2.40.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    DEVELOPMENT_TEAM: ""
+
+packages:
+  DHBootlegToolkitCore:
+    path: DHBootlegToolkitCore
+
+targets:
+  DHBootlegToolkit:
+    type: application
+    platform: macOS
+    sources:
+      - path: DHBootlegToolkit
+        type: syncedFolder
+        excludes:
+          - "**/*.plist"
+      - path: DHBootlegToolkit/Assets.xcassets
+        type: folder
+    dependencies:
+      - package: DHBootlegToolkitCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.dhbootlegtoolkit.app
+        INFOPLIST_FILE: DHBootlegToolkit/Resources/Info.plist
+        PRODUCT_NAME: DHBootlegToolkit
+        PRODUCT_MODULE_NAME: DHBootlegToolkit
+        SWIFT_EMIT_LOC_STRINGS: "YES"
+        GENERATE_INFOPLIST_FILE: "NO"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: "NO"
+        ENABLE_APP_SANDBOX: "NO"
+        SKIP_INSTALL: "NO"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    entitlements:
+      path: DHBootlegToolkit/Resources/DHBootlegToolkit.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+        com.apple.security.files.user-selected.read-write: true
+        com.apple.security.network.client: true
+
+  DHBootlegToolkitTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: DHBootlegToolkitTests
+        type: syncedFolder
+    dependencies:
+      - target: DHBootlegToolkit
+      - package: DHBootlegToolkitCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.dhbootlegtoolkit.app.tests
+        GENERATE_INFOPLIST_FILE: "YES"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
