@@ -33,6 +33,31 @@ DHBootlegToolkit provides four integrated modules with shared Git workflow:
 - External change detection with conflict resolution
 - Native macOS window title bar integration
 
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="images/Market%20Watcher.png" alt="Market Watch" />
+      <p align="center"><strong>Market Watch</strong> - Real-time stock tracking with sentiment analysis</p>
+    </td>
+    <td width="50%">
+      <img src="images/Not%20WebtranslateIt%20Editor.png" alt="Localization Editor" />
+      <p align="center"><strong>Localization Editor</strong> - Translation key management with liquid glass toolbar</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="images/S3%20Feature%20Config%20Editor.png" alt="S3 Config Editor" />
+      <p align="center"><strong>S3 Config Editor</strong> - JSON tree editor for feature configs</p>
+    </td>
+    <td width="50%">
+      <img src="images/S3%20Feature%20Config%20Editor%20-%20Batch%20Update.png" alt="S3 Batch Update" />
+      <p align="center"><strong>Batch Update</strong> - Apply changes across multiple countries</p>
+    </td>
+  </tr>
+</table>
+
 ## Getting Started
 
 ### Installation
@@ -171,6 +196,8 @@ Real-time stock market monitoring with sentiment analysis.
 - Adaptive axis labels based on time range
 - Color-coded sentiment overlay on range selection
 
+![Market Watch Screenshot](images/Market%20Watcher.png)
+
 ### Localization Editor
 
 **Location:** `DHBootlegToolkit/Views/LocalizationEditor/`
@@ -201,6 +228,8 @@ Edit translation keys for mobile and web platforms.
 - Keyboard shortcut (⌘S) for quick save
 - Bottom padding to prevent content from being hidden behind toolbar
 
+![Localization Editor Screenshot](images/Not%20WebtranslateIt%20Editor.png)
+
 ### S3 Feature Config Editor
 
 **Location:** `DHBootlegToolkit/Views/S3FeatureConfigEditor/`
@@ -223,6 +252,12 @@ Edit feature configuration stored in S3 JSON format.
 | `JSONTreeView.swift` | Hierarchical JSON tree editor |
 | `S3PromotionSheet.swift` | Promote configs between environments |
 | `S3ApplyFieldSheet.swift` | Apply field across countries |
+
+![S3 Feature Config Editor Screenshot](images/S3%20Feature%20Config%20Editor.png)
+
+**Batch Update Feature:**
+
+![S3 Batch Update Screenshot](images/S3%20Feature%20Config%20Editor%20-%20Batch%20Update.png)
 
 ---
 
