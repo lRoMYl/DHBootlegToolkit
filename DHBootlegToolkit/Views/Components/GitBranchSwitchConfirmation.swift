@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Generic confirmation dialog for branch switching with uncommitted changes
+/// Generic confirmation dialog for branch switching when git fails due to uncommitted changes
 struct GitBranchSwitchConfirmation<Store: GitPublishable>: ViewModifier {
     let store: Store
     let editorName: String
@@ -10,24 +10,11 @@ struct GitBranchSwitchConfirmation<Store: GitPublishable>: ViewModifier {
 
         content
             .confirmationDialog(
-                "Unsaved Changes",
+                "Cannot Switch Branch",
                 isPresented: $store.showUncommittedChangesConfirmation,
                 presenting: store.pendingBranchSwitch
             ) { targetBranch in
-                // Only show "Save & Switch" if not on a protected branch
-                if !store.gitStatus.isOnProtectedBranch {
-                    Button("Save & Switch") {
-                        Task {
-                            if let error = await store.commitAndSwitchBranch() {
-                                store.publishErrorMessage = error
-                                store.showPublishError = true
-                            }
-                        }
-                    }
-                }
-
-                // Show "Discard & Switch" option
-                Button("Discard & Switch", role: .destructive) {
+                Button("Discard Changes & Switch", role: .destructive) {
                     Task {
                         if let error = await store.discardAndSwitchBranch() {
                             store.publishErrorMessage = error
@@ -40,10 +27,10 @@ struct GitBranchSwitchConfirmation<Store: GitPublishable>: ViewModifier {
                     store.cancelBranchSwitch()
                 }
             } message: { targetBranch in
-                if store.gitStatus.isOnProtectedBranch {
-                    Text("You have uncommitted \(editorName) changes on protected branch '\(store.gitStatus.currentBranch ?? "")'. You must discard them before switching to '\(targetBranch)'.")
+                if let rawError = store.pendingBranchSwitchError {
+                    Text("Git cannot switch to '\(targetBranch)' because you have local changes that would be overwritten.\n\nDiscard changes to proceed?\n\nDetails: \(rawError)")
                 } else {
-                    Text("You have uncommitted \(editorName) changes. Save them before switching to '\(targetBranch)'?")
+                    Text("Git cannot switch to '\(targetBranch)' because you have local changes. Discard them to proceed?")
                 }
             }
     }

@@ -7,6 +7,7 @@ enum JSONChangeStatus: Equatable {
     case unchanged
     case added
     case modified
+    case deleted
 }
 
 // MARK: - JSON Node Type
@@ -161,6 +162,10 @@ struct FlattenedNode: Identifiable {
 
     var isExpandable: Bool {
         nodeType.isExpandable
+    }
+
+    var isDeleted: Bool {
+        changeStatus == .deleted
     }
 
     var indentation: CGFloat {

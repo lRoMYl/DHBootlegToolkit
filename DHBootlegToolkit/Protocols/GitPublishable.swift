@@ -20,6 +20,7 @@ protocol GitPublishable: AnyObject, Observable {
 
     // Branch switch confirmation state
     var pendingBranchSwitch: String? { get set }
+    var pendingBranchSwitchError: String? { get set }
     var showUncommittedChangesConfirmation: Bool { get set }
 
     // Publish state
@@ -51,64 +52,39 @@ extension GitPublishable {
         gitStatus.hasUncommittedChanges && gitStatus.isReady
     }
 
-    /// Attempts to switch branch, showing confirmation if uncommitted changes exist
-    func requestBranchSwitch(_ branchName: String) {
-        if gitStatus.hasUncommittedChanges {
-            pendingBranchSwitch = branchName
-            showUncommittedChangesConfirmation = true
-        } else {
-            Task { _ = await performBranchSwitch(branchName) }
-        }
+    /// Checks if an error message indicates uncommitted changes conflict
+    private func isUncommittedChangesError(_ message: String) -> Bool {
+        message.contains("unstaged changes") ||
+        message.contains("uncommitted changes") ||
+        message.contains("Please commit or stash") ||
+        message.contains("would be overwritten") ||
+        message.contains("local changes")
     }
 
-    /// Commits current changes and then switches branch (called when user confirms)
-    func commitAndSwitchBranch() async -> String? {
-        guard let gitWorker, let targetBranch = pendingBranchSwitch else {
-            return "No pending branch switch"
-        }
-
-        return await AppLogger.shared.timedGroup("Commit and Switch Branch") { ctx in
-            isLoading = true
-            defer { isLoading = false }
-
-            // Check if current branch is protected
-            if gitStatus.isOnProtectedBranch {
-                pendingBranchSwitch = nil
-                let branchName = gitStatus.currentBranch ?? "unknown"
-                return "Cannot commit on protected branch '\(branchName)'. Please create a feature branch first."
-            }
-
-            // Save all modifications to disk (store-specific)
-            do {
-                try await ctx.time("Save modifications") {
-                    try await saveAllModifications()
+    /// Attempts to switch branch directly, showing confirmation only if git fails due to uncommitted changes
+    func requestBranchSwitch(_ branchName: String) {
+        Task {
+            // Try switching directly - git allows checkout with uncommitted
+            // changes if they don't conflict with the target branch
+            if let error = await performBranchSwitch(branchName) {
+                // Check if error is about uncommitted changes
+                if isUncommittedChangesError(error) {
+                    pendingBranchSwitch = branchName
+                    pendingBranchSwitchError = error
+                    showUncommittedChangesConfirmation = true
+                } else {
+                    // Show other errors directly
+                    publishErrorMessage = error
+                    showPublishError = true
                 }
-            } catch {
-                return "Failed to save changes: \(error.localizedDescription)"
             }
-
-            // Auto-commit with WIP message
-            do {
-                try await ctx.time("Auto-commit changes") {
-                    let commitMessage = "WIP: Auto-save before switching to \(targetBranch) - \(generateCommitMessage())"
-                    try await gitWorker.commitAll(message: commitMessage)
-                }
-            } catch {
-                return "Failed to commit changes: \(error.localizedDescription)"
-            }
-
-            // Switch branch
-            let error = await ctx.time("Switch to \(targetBranch)") {
-                await performBranchSwitch(targetBranch)
-            }
-            pendingBranchSwitch = nil
-            return error
         }
     }
 
     /// Cancels pending branch switch
     func cancelBranchSwitch() {
         pendingBranchSwitch = nil
+        pendingBranchSwitchError = nil
         showUncommittedChangesConfirmation = false
     }
 
@@ -136,6 +112,7 @@ extension GitPublishable {
                 await performBranchSwitch(targetBranch)
             }
             pendingBranchSwitch = nil
+            pendingBranchSwitchError = nil
             return error
         }
     }

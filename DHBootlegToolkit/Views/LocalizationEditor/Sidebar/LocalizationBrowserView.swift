@@ -108,6 +108,7 @@ struct LocalizationRepositoryPrompt: View {
 
     private func selectRepository() {
         let panel = NSOpenPanel()
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
@@ -153,6 +154,7 @@ struct LocalizationRepositoryError: View {
 
     private func selectRepository() {
         let panel = NSOpenPanel()
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
@@ -768,6 +770,7 @@ struct AddNewKeyButton: View {
     var body: some View {
         Button {
             if store.isOnProtectedBranch {
+                store.pendingAddNewKeyFeature = feature
                 store.showCreateBranchPrompt = true
             } else {
                 store.openNewKeyTab(for: feature)

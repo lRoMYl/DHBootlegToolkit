@@ -16,6 +16,37 @@ struct ExternalChangeInfo {
     let filePath: String
 }
 
+// MARK: - New Key Form Data
+
+/// Persists the state of the New Key wizard across tab switches
+struct NewKeyFormData {
+    enum WizardStep: Int, CaseIterable {
+        case screenshot = 0
+        case keyDetails = 1
+        case review = 2
+
+        var title: String {
+            switch self {
+            case .screenshot: return "Add Screenshot"
+            case .keyDetails: return "Key Details"
+            case .review: return "Review & Create"
+            }
+        }
+
+        var stepNumber: Int { rawValue + 1 }
+        var totalSteps: Int { WizardStep.allCases.count }
+    }
+
+    var currentStep: WizardStep = .screenshot
+    var screenshotURL: URL?
+    var generatedScreenshotName: String = ""
+    var keyName: String = ""
+    var translation: String = ""
+    var notes: String = ""
+    var targetLanguagesText: String = ""
+    var charLimit: Int?
+}
+
 @Observable
 @MainActor
 final class AppStore {
@@ -52,6 +83,7 @@ final class AppStore {
     var activeTabId: UUID?                    // Currently focused key tab
     var showNewKeyTab = false                 // "New" tab (always first, max 1)
     var newKeyTabFeature: FeatureFolder?
+    var newKeyFormData: NewKeyFormData?       // Persisted form data for "New" tab
     var isNewKeyTabActive: Bool {             // Is "New" tab the active one?
         showNewKeyTab && activeTabId == nil
     }
@@ -71,6 +103,9 @@ final class AppStore {
 
     var showRepositoryPickerDialog = false
     var showCreateBranchPrompt = false
+
+    /// Feature to open Add New Key tab for after branch creation (set when Add New Key triggers branch prompt)
+    var pendingAddNewKeyFeature: FeatureFolder?
     var showPublishError = false
     var publishErrorMessage: String?
 
@@ -82,6 +117,7 @@ final class AppStore {
 
     // Branch switch confirmation state
     var pendingBranchSwitch: String?
+    var pendingBranchSwitchError: String?
     var showUncommittedChangesConfirmation = false
 
     // External change detection state
@@ -900,6 +936,10 @@ final class AppStore {
 
     /// Open a new key wizard tab for a feature
     func openNewKeyTab(for feature: FeatureFolder) {
+        // Only create new form data if opening for a different feature or no data exists
+        if newKeyTabFeature?.id != feature.id || newKeyFormData == nil {
+            newKeyFormData = NewKeyFormData()
+        }
         showNewKeyTab = true
         newKeyTabFeature = feature
         activeTabId = nil  // New tab is active when activeTabId is nil
@@ -909,6 +949,7 @@ final class AppStore {
     func closeNewKeyTab() {
         showNewKeyTab = false
         newKeyTabFeature = nil
+        newKeyFormData = nil  // Clear form data when tab is closed
         // Activate the last key tab if any exist
         activeTabId = openTabs.last?.id
     }
@@ -926,6 +967,7 @@ final class AppStore {
         activeTabId = nil
         showNewKeyTab = false
         newKeyTabFeature = nil
+        newKeyFormData = nil  // Clear form data
     }
 
     /// Update the edited key in the active tab

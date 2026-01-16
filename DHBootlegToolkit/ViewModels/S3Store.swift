@@ -151,11 +151,19 @@ final class S3Store {
 
     // Branch switch confirmation state (required by GitPublishable)
     var pendingBranchSwitch: String?
+    var pendingBranchSwitchError: String?
     var showUncommittedChangesConfirmation = false
+
+    // Create branch prompt state (for protected branch banner)
+    var showCreateBranchPrompt = false
 
     // PR creation state (required by GitPublishable)
     var showPublishError = false
     var publishErrorMessage: String?
+
+    // Save error state
+    var showSaveError = false
+    var saveErrorMessage: String?
 
     // Repository-wide discard confirmation
     var showDiscardRepositoryConfirmation = false
@@ -915,6 +923,12 @@ final class S3Store {
                 continue
             }
 
+            // Check if file still exists (parent directory must exist for atomic write)
+            let parentDir = country.configURL.deletingLastPathComponent()
+            guard FileManager.default.fileExists(atPath: parentDir.path) else {
+                throw S3StoreError.fileDeleted(country.countryCode)
+            }
+
             try data.write(to: country.configURL, options: .atomic)
         }
 
@@ -945,6 +959,12 @@ final class S3Store {
     func saveCountry(_ country: S3CountryConfig) async throws {
         guard let data = country.configData else {
             throw S3StoreError.noDataToSave
+        }
+
+        // Check if file still exists (parent directory must exist for atomic write)
+        let parentDir = country.configURL.deletingLastPathComponent()
+        guard FileManager.default.fileExists(atPath: parentDir.path) else {
+            throw S3StoreError.fileDeleted(country.countryCode)
         }
 
         try data.write(to: country.configURL, options: .atomic)
@@ -1194,6 +1214,7 @@ enum S3StoreError: LocalizedError {
     case noDataToSave
     case invalidWizardState
     case valueNotFound
+    case fileDeleted(String)
 
     var errorDescription: String? {
         switch self {
@@ -1203,6 +1224,8 @@ enum S3StoreError: LocalizedError {
             return "Invalid wizard state - missing source, path, or targets"
         case .valueNotFound:
             return "Could not find value at the specified path"
+        case .fileDeleted(let countryCode):
+            return "Cannot save: The config file for '\(countryCode)' was deleted. Please reload the repository."
         }
     }
 }

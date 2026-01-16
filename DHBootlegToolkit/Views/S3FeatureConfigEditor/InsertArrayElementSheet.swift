@@ -113,6 +113,10 @@ struct InsertArrayElementSheet: View {
             .padding()
         }
         .frame(width: 400, height: 320)
+        .onAppear {
+            // Safety dismissal: don't allow inserting elements on protected branches
+            if store.isOnProtectedBranch { dismiss() }
+        }
     }
 
     // MARK: - Value Editor

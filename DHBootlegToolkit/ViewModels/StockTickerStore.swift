@@ -183,6 +183,27 @@ final class StockTickerStore {
         await worker.refreshData()
     }
 
+    /// Clear all cached data (in-memory and UserDefaults)
+    func clearCache() {
+        // Clear in-memory caches
+        stocks.removeAll()
+        sentiments.removeAll()
+        chartDataCache.removeAll()
+        thresholdCache.removeAll()
+        thresholdCacheTime.removeAll()
+
+        // Clear UserDefaults cache
+        let defaults = UserDefaults.standard
+        for symbol in symbols {
+            defaults.removeObject(forKey: "stock_\(symbol)")
+            defaults.removeObject(forKey: "sentiment_\(symbol)")
+        }
+        defaults.removeObject(forKey: Self.selectedChartRangeKey)
+
+        // Reset to default chart range
+        selectedChartRange = .oneDay
+    }
+
     /// Rotate sentiment commentary (user-triggered)
     func rotateSentiment(for symbol: String) {
         guard let stockData = stocks[symbol] else { return }

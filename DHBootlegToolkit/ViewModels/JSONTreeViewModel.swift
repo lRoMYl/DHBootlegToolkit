@@ -223,10 +223,10 @@ final class JSONTreeViewModel {
         rebuildFlattenedNodes()
     }
 
-    /// Returns the count of fields with changes (added or modified)
+    /// Returns the count of fields with changes (added, modified, or deleted)
     func countChangedFields() -> Int {
         return pathChangeStatus.values.filter { status in
-            status == .added || status == .modified
+            status == .added || status == .modified || status == .deleted
         }.count
     }
 
@@ -252,9 +252,17 @@ final class JSONTreeViewModel {
     ) -> [FlattenedNode] {
         var result: [FlattenedNode] = []
 
-        for key in dict.keys.sorted() {
-            guard let value = dict[key] else { continue }
+        // Collect all keys: current keys + deleted keys from original
+        var allKeys = Set(dict.keys)
 
+        // Find deleted keys from original
+        if let originalDict = getOriginalValue(at: parentPath) as? [String: Any] {
+            for key in originalDict.keys where dict[key] == nil {
+                allKeys.insert(key)
+            }
+        }
+
+        for key in allKeys.sorted() {
             let path = parentPath + [key]
             let pathString = path.joined(separator: ".")
 
@@ -263,8 +271,29 @@ final class JSONTreeViewModel {
                 continue
             }
 
-            let nodeType = JSONNodeType.infer(from: value)
-            let isExpanded = self.isExpanded(pathString)
+            let isDeleted = dict[key] == nil
+            let value: Any
+            let nodeType: JSONNodeType
+            let changeStatus: JSONChangeStatus?
+
+            if isDeleted {
+                // Deleted node - get value from original
+                guard let originalDict = getOriginalValue(at: parentPath) as? [String: Any],
+                      let originalValue = originalDict[key] else {
+                    continue
+                }
+                value = originalValue
+                nodeType = JSONNodeType.infer(from: originalValue)
+                changeStatus = .deleted
+            } else {
+                // Normal node - get value from current
+                guard let currentValue = dict[key] else { continue }
+                value = currentValue
+                nodeType = JSONNodeType.infer(from: currentValue)
+                changeStatus = pathChangeStatus[pathString]
+            }
+
+            let isExpanded = !isDeleted && self.isExpanded(pathString) // Deleted nodes don't expand
             let isCurrentMatch = (currentMatchPath == path)
 
             let node = FlattenedNode(
@@ -277,13 +306,13 @@ final class JSONTreeViewModel {
                 parentType: parentType,
                 isExpanded: isExpanded,
                 isCurrentMatch: isCurrentMatch,
-                changeStatus: pathChangeStatus[pathString]
+                changeStatus: changeStatus
             )
 
             result.append(node)
 
-            // Recursively add children if expanded
-            if isExpanded {
+            // Recursively add children if expanded (not for deleted nodes)
+            if isExpanded && !isDeleted {
                 if let childDict = value as? [String: Any] {
                     result += flattenJSON(childDict, parentPath: path, depth: depth + 1, parentType: .object)
                 } else if let childArray = value as? [Any] {
@@ -304,7 +333,11 @@ final class JSONTreeViewModel {
     ) -> [FlattenedNode] {
         var result: [FlattenedNode] = []
 
-        for (index, value) in array.enumerated() {
+        // Get original array if available (for detecting deleted elements)
+        let originalArray = getOriginalValue(at: parentPath) as? [Any]
+        let totalCount = max(array.count, originalArray?.count ?? 0)
+
+        for index in 0..<totalCount {
             let key = "[\(index)]"
             let path = parentPath + [String(index)]
             let pathString = path.joined(separator: ".")
@@ -314,8 +347,27 @@ final class JSONTreeViewModel {
                 continue
             }
 
-            let nodeType = JSONNodeType.infer(from: value)
-            let isExpanded = self.isExpanded(pathString)
+            let isDeleted = index >= array.count
+            let value: Any
+            let nodeType: JSONNodeType
+            let changeStatus: JSONChangeStatus?
+
+            if isDeleted {
+                // Deleted element - get value from original
+                guard let originalArray = originalArray, index < originalArray.count else {
+                    continue
+                }
+                value = originalArray[index]
+                nodeType = JSONNodeType.infer(from: value)
+                changeStatus = .deleted
+            } else {
+                // Normal element
+                value = array[index]
+                nodeType = JSONNodeType.infer(from: value)
+                changeStatus = pathChangeStatus[pathString]
+            }
+
+            let isExpanded = !isDeleted && self.isExpanded(pathString)
             let isCurrentMatch = (currentMatchPath == path)
 
             let node = FlattenedNode(
@@ -328,13 +380,13 @@ final class JSONTreeViewModel {
                 parentType: parentType,
                 isExpanded: isExpanded,
                 isCurrentMatch: isCurrentMatch,
-                changeStatus: pathChangeStatus[pathString]
+                changeStatus: changeStatus
             )
 
             result.append(node)
 
-            // Recursively add children if expanded
-            if isExpanded {
+            // Recursively add children if expanded (not for deleted nodes)
+            if isExpanded && !isDeleted {
                 if let childDict = value as? [String: Any] {
                     result += flattenJSON(childDict, parentPath: path, depth: depth + 1, parentType: .object)
                 } else if let childArray = value as? [Any] {
@@ -404,14 +456,31 @@ final class JSONTreeViewModel {
         return result
     }
 
+    /// Navigate the original JSON to get the value at a specific path
+    private func getOriginalValue(at path: [String]) -> Any? {
+        guard let original = originalJSON else { return nil }
+        var current: Any = original
+        for component in path {
+            if let dict = current as? [String: Any] {
+                guard let next = dict[component] else { return nil }
+                current = next
+            } else if let array = current as? [Any], let index = Int(component), index < array.count {
+                current = array[index]
+            } else {
+                return nil
+            }
+        }
+        return current
+    }
+
     /// Computes which paths should be visible when filtering by changes
     /// Returns set of paths that have changes OR are ancestors of changed nodes
     private func computeVisiblePathsForChangeFilter() -> Set<String> {
         var visiblePaths = Set<String>()
 
-        // For each changed path (added or modified), include it and all ancestors
+        // For each changed path (added, modified, or deleted), include it and all ancestors
         for (pathString, status) in pathChangeStatus {
-            guard status == .added || status == .modified else { continue }
+            guard status == .added || status == .modified || status == .deleted else { continue }
 
             // Add the changed path itself
             visiblePaths.insert(pathString)
