@@ -39,21 +39,21 @@ DHBootlegToolkit provides four integrated modules with shared Git workflow:
   <tr>
     <td width="50%">
       <img src="images/Market%20Watcher.png" alt="Market Watch" />
-      <p align="center"><strong>Market Watch</strong> - Real-time stock tracking with sentiment analysis</p>
+      <p align="center"><strong>Market Watch</strong> - Real-time stock tracking with memes</p>
     </td>
     <td width="50%">
       <img src="images/Not%20WebtranslateIt%20Editor.png" alt="Localization Editor" />
-      <p align="center"><strong>Localization Editor</strong> - Translation key management with liquid glass toolbar</p>
+      <p align="center"><strong>Not WebTranslateIt Editor</strong> - Goodbye WTI, a tribute to you</p>
     </td>
   </tr>
   <tr>
     <td width="50%">
       <img src="images/S3%20Feature%20Config%20Editor.png" alt="S3 Config Editor" />
-      <p align="center"><strong>S3 Config Editor</strong> - JSON tree editor for feature configs</p>
+      <p align="center"><strong>S3 Feature Config Editor</strong> - 6 years of manual editing, adios</p>
     </td>
     <td width="50%">
       <img src="images/S3%20Feature%20Config%20Editor%20-%20Batch%20Update.png" alt="S3 Batch Update" />
-      <p align="center"><strong>Batch Update</strong> - Apply changes across multiple countries</p>
+      <p align="center"><strong>S3 Feature Config Batch Update</strong> - Apply changes across multiple countries</p>
     </td>
   </tr>
 </table>
@@ -503,32 +503,18 @@ DHBootlegToolkit/
 │
 ├── DHBootlegToolkit/                        # macOS SwiftUI App
 │   ├── App/DHBootlegToolkitApp.swift        # @main entry point
-│   ├── ViewModels/                          # State containers
-│   │   ├── AppStore.swift                   # Localization editor state
-│   │   ├── S3Store.swift                    # S3 config editor state
-│   │   ├── StockTickerStore.swift           # Stock ticker state
-│   │   ├── JSONTreeViewModel.swift          # JSON tree navigation
-│   │   └── LogStore.swift                   # Operation logging
-│   ├── Views/
+│   ├── ViewModels/                          # View State containers
+│   ├── Views/                               # Views
 │   │   ├── MainSplitView.swift              # Primary layout + git bar
 │   │   ├── Components/                      # Shared components (GitStatusBar, etc.)
 │   │   ├── Sidebar/                         # SidebarView with 4 tabs
 │   │   ├── StockTicker/                     # Stock Ticker module
-│   │   │   ├── StockTickerDetailView.swift
-│   │   │   ├── Components/                  # Price card, charts, sentiment
-│   │   │   └── Sidebar/                     # Stock list browser
 │   │   ├── LocalizationEditor/              # Localization Editor module
-│   │   │   ├── DetailTabView.swift          # Tab container + wizard
-│   │   │   ├── TranslationDetailView.swift  # Key editor with fixed toolbar
-│   │   │   └── Components/                  # List, form, preview views
 │   │   └── S3FeatureConfigEditor/           # S3 Config Editor module
-│   │       ├── S3DetailView.swift           # JSON tree editor
-│   │       └── Components/                  # Browser, sheets, tree views
 │   └── Models/                              # EditorTab, LogEntry
 │
 ├── DHBootlegToolkitTests/                   # Unit tests
 ├── project.yml                              # XcodeGen configuration
-└── README.md
 ```
 
 ---
@@ -563,20 +549,6 @@ The `FileSystemWorker` manually builds JSON to preserve key order, which is impo
 **External Change Detection:**
 File hashes (prefix + suffix + length) are cached and compared on app focus to detect concurrent edits.
 
-**Liquid Glass UI:**
-```swift
-.background(.ultraThinMaterial)  // Translucent frosted glass
-.background(.bar)                // System toolbar material
-```
-
-**Swift Charts Integration:**
-Uses Swift Charts with:
-- `AreaMark` for gradient fills
-- `LineMark` for price lines
-- `PointMark` for selection indicators
-- `RuleMark` for range selection
-- Catmull-Rom interpolation for smooth curves
-
 ### Testing
 
 ```bash
@@ -586,57 +558,6 @@ swift test
 
 # Run app tests via Xcode
 xcodebuild test -scheme DHBootlegToolkitTests
-```
-
----
-
-## UI Design Patterns
-
-### Fixed Bottom Toolbars
-
-Translation editor uses fixed bottom toolbar pattern:
-```swift
-VStack(spacing: 0) {
-    ScrollView {
-        // Form content
-    }
-
-    // Fixed toolbar
-    HStack {
-        Button("Discard") { }
-        Spacer()
-        Button("Save") { }
-    }
-    .padding(.horizontal, 20)
-    .padding(.vertical, 14)
-    .background(.ultraThinMaterial)  // Liquid glass effect
-}
-```
-
-### Equal Height Layouts
-
-Stock ticker price card and thresholds:
-```swift
-HStack(alignment: .top, spacing: 20) {
-    StockPriceCard()
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-
-    SentimentThresholdLegend()
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-}
-```
-
-### Chart Axis Configuration
-
-```swift
-.chartXAxis {
-    AxisMarks(values: .stride(by: xAxisStride())) { _ in
-        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-            .foregroundStyle(.secondary.opacity(0.3))
-        AxisValueLabel(format: xAxisFormat())
-            .font(.caption2)
-    }
-}
 ```
 
 ---
