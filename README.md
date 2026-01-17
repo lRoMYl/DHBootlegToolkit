@@ -75,6 +75,18 @@ brew install --cask dhbootlegtoolkit
 brew install --cask lromyl/tap/dhbootlegtoolkit
 ```
 
+### Releases
+
+Releases are fully automated via GitHub Actions. For maintainers creating releases, see [RELEASE.md](RELEASE.md) for the complete release process guide.
+
+**Quick summary:**
+- Releases are created via the GitHub UI
+- GitHub Actions automatically builds, packages, and uploads the app
+- Homebrew cask is automatically updated
+- Users can upgrade via `brew upgrade --cask dhbootlegtoolkit`
+
+**Latest releases:** https://github.com/lRoMYl/DHBootlegToolkit/releases
+
 ### Prerequisites (Building from Source)
 
 - macOS 15+ (Sequoia)
