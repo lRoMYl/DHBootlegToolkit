@@ -30,6 +30,7 @@ struct S3InspectFieldSheet: View {
     @State private var availableCountriesForEnvironment: [S3CountryConfig] = []
     @State private var inspectionValues: [CountryInspectionValue] = []
     @State private var sourceTreeViewModel = JSONTreeViewModel()
+    @State private var focusCoordinator = FieldFocusCoordinator()
 
     enum WizardStep {
         case selectCountries
@@ -104,7 +105,8 @@ struct S3InspectFieldSheet: View {
                             node: node,
                             onToggleExpand: { sourceTreeViewModel.toggleExpand(node.id) },
                             onValueChange: { _, _ in },
-                            isReadOnly: true
+                            isReadOnly: true,
+                            focusCoordinator: focusCoordinator
                         )
                     }
                 }
@@ -185,7 +187,8 @@ struct S3InspectFieldSheet: View {
                         CountryInspectionCard(
                             inspectionValue: $inspectionValue,
                             fieldPath: store.selectedNodePath ?? "",
-                            onSave: saveFieldValue
+                            onSave: saveFieldValue,
+                            focusCoordinator: focusCoordinator
                         )
                     }
                 }
@@ -407,6 +410,7 @@ struct CountryInspectionCard: View {
     @Binding var inspectionValue: CountryInspectionValue
     let fieldPath: String
     let onSave: @MainActor (String, Any) async throws -> Void
+    let focusCoordinator: FieldFocusCoordinator
 
     @State private var treeViewModel = JSONTreeViewModel()
     @State private var isSaving: Bool = false
@@ -518,7 +522,8 @@ struct CountryInspectionCard: View {
                         onValueChange: { path, newValue in
                             updateEditedValue(at: path, with: newValue)
                         },
-                        isReadOnly: !inspectionValue.isEditing
+                        isReadOnly: !inspectionValue.isEditing,
+                        focusCoordinator: focusCoordinator
                     )
                 }
             }
@@ -589,13 +594,19 @@ struct CountryInspectionCard: View {
                 dict[key] = updateValueAtPath(in: existingValue, path: Array(path.dropFirst()), newValue: newValue)
             }
             return dict
-        } else if var array = value as? [Any], let index = Int(path[0]), index < array.count {
-            if path.count == 1 {
-                array[index] = newValue
-            } else {
-                array[index] = updateValueAtPath(in: array[index], path: Array(path.dropFirst()), newValue: newValue)
+        } else if var array = value as? [Any] {
+            // Strip brackets from array index (e.g., "[0]" -> "0")
+            let indexStr = path[0]
+                .replacingOccurrences(of: "[", with: "")
+                .replacingOccurrences(of: "]", with: "")
+            if let index = Int(indexStr), index < array.count {
+                if path.count == 1 {
+                    array[index] = newValue
+                } else {
+                    array[index] = updateValueAtPath(in: array[index], path: Array(path.dropFirst()), newValue: newValue)
+                }
+                return array
             }
-            return array
         }
 
         return value

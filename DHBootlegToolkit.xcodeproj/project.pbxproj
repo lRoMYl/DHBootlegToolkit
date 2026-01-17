@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -25,29 +25,13 @@
 /* Begin PBXFileReference section */
 		134AB6E4966C19E0594957A5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Assets.xcassets; path = DHBootlegToolkit/Assets.xcassets; sourceTree = SOURCE_ROOT; };
 		785077D8848C697F302ECB92 /* DHBootlegToolkit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DHBootlegToolkit.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		BAA2DCA7F7056296BC5693CD /* DHBootlegToolkitCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = DHBootlegToolkitCore; path = DHBootlegToolkitCore; sourceTree = SOURCE_ROOT; };
+		BAA2DCA7F7056296BC5693CD /* DHBootlegToolkitCore */ = {isa = PBXFileReference; lastKnownFileType = folder; path = DHBootlegToolkitCore; sourceTree = SOURCE_ROOT; };
 		FFC14A82C043842B140C07FD /* DHBootlegToolkitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DHBootlegToolkitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		3AA772A3E8399CFAEDC4BCB0 /* DHBootlegToolkit */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = DHBootlegToolkit;
-			sourceTree = "<group>";
-		};
-		A8F44DA43F2C720675EC1F0A /* DHBootlegToolkitTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = DHBootlegToolkitTests;
-			sourceTree = "<group>";
-		};
+		3AA772A3E8399CFAEDC4BCB0 /* DHBootlegToolkit */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = DHBootlegToolkit; sourceTree = "<group>"; };
+		A8F44DA43F2C720675EC1F0A /* DHBootlegToolkitTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = DHBootlegToolkitTests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -187,7 +171,6 @@
 			packageReferences = (
 				C55F11622091EFA7082ECB91 /* XCLocalSwiftPackageReference "DHBootlegToolkitCore" */,
 			);
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (

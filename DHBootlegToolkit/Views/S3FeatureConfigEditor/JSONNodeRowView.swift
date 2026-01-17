@@ -16,6 +16,7 @@ struct JSONNodeRowView: View {
     var onSelect: (([String], Any) -> Void)? = nil
     var isSelected: Bool = false
     var isReadOnly: Bool = false
+    let focusCoordinator: FieldFocusCoordinator
 
     var body: some View {
         HStack(spacing: 6) {
@@ -51,31 +52,29 @@ struct JSONNodeRowView: View {
 
             Spacer()
 
-            // Type badge
-            NodeTypeBadge(nodeType: node.nodeType)
+            // Type badge (always shows type tooltip, not schema description)
+            TypeBadge(
+                type: node.nodeType.schemaType,
+                isInferred: node.schemaDescription == nil
+            )
 
-            // Schema description tooltip
+            // Schema description info badge (shows schema description if available)
             if let description = node.schemaDescription {
-                Image(systemName: "info.circle")
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-                    .help(description)
+                StatusLetterBadge.info(tooltip: description)
             }
 
             // Validation error badge
             if let error = node.validationError {
-                Image(systemName: error.severity == .error ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
-                    .foregroundStyle(error.severity == .error ? .red : .orange)
-                    .font(.caption)
-                    .help(error.message)
+                if error.severity == .error {
+                    StatusLetterBadge.error(tooltip: error.message)
+                } else {
+                    StatusLetterBadge.warning(tooltip: error.message)
+                }
             }
 
             // Required field indicator
             if node.isRequired {
-                Text("*")
-                    .foregroundStyle(.red)
-                    .font(.caption)
-                    .help("Required field")
+                StatusLetterBadge.required()
             }
 
             // Change status badge (for leaf nodes with changes, or any deleted node)
@@ -100,7 +99,8 @@ struct JSONNodeRowView: View {
         .opacity(node.isDeleted ? 0.7 : 1.0)
         .contentShape(Rectangle())
         .onTapGesture {
-            // Single tap selects the node
+            // Single tap selects the node and clears focus
+            focusCoordinator.clearFocus()
             onSelect?(node.path, node.value)
         }
         .contextMenu {
@@ -226,7 +226,9 @@ struct JSONNodeRowView: View {
                         value: stringValue,
                         onCommit: { newValue in
                             onValueChange(node.path, newValue)
-                        }
+                        },
+                        fieldIdentifier: .field(node.path, type: .string),
+                        focusCoordinator: focusCoordinator
                     )
                 }
             }
@@ -252,7 +254,7 @@ struct JSONNodeRowView: View {
         case .int:
             if let numberValue = node.numberValue {
                 if showReadOnly {
-                    Text(numberValue.stringValue)
+                    Text(numberValue.displayValue)
                         .font(.system(.body, design: .monospaced))
                         .strikethrough(node.isDeleted)
                         .foregroundColor(node.isDeleted ? Color.secondary : Color.purple)
@@ -261,7 +263,9 @@ struct JSONNodeRowView: View {
                         value: numberValue,
                         onCommit: { newValue in
                             onValueChange(node.path, newValue)
-                        }
+                        },
+                        fieldIdentifier: .field(node.path, type: .number),
+                        focusCoordinator: focusCoordinator
                     )
                 }
             }
@@ -282,22 +286,20 @@ struct JSONNodeRowView: View {
 
 }
 
-// MARK: - Node Type Badge
+// MARK: - JSONNodeType Extension
 
-/// Badge displaying the pre-computed type of a JSON node
-struct NodeTypeBadge: View {
-    let nodeType: JSONNodeType
-
-    var body: some View {
-        Text(nodeType.badgeLabel)
-            .font(.caption2.weight(.medium).monospaced())
-            .foregroundStyle(nodeType.iconColor)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 1)
-            .background(
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .stroke(nodeType.iconColor.opacity(0.3), lineWidth: 1)
-            )
+/// Extension to convert JSONNodeType to JSONSchemaType for badge display
+extension JSONNodeType {
+    var schemaType: JSONSchemaType {
+        switch self {
+        case .object: return .object
+        case .array: return .array
+        case .string: return .string
+        case .int: return .int
+        case .bool: return .bool
+        case .null: return .null
+        case .unknown: return .any
+        }
     }
 }
 
@@ -307,24 +309,40 @@ struct NodeTypeBadge: View {
 struct JSONStringRowEditor: View {
     let value: String
     let onCommit: (String) -> Void
+    let fieldIdentifier: FieldIdentifier
+    let focusCoordinator: FieldFocusCoordinator
 
     @State private var editedValue: String = ""
     @State private var isEditing: Bool = false
-    @FocusState private var isFocused: Bool
+    @FocusState private var localFocus: FieldIdentifier?
 
     var body: some View {
         if isEditing {
             TextField("Value", text: $editedValue)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(.body, design: .monospaced))
-                .focused($isFocused)
+                .focused($localFocus, equals: fieldIdentifier)
                 .onSubmit {
                     onCommit(editedValue)  // Always commit, let store handle duplicates
                     isEditing = false
+                    focusCoordinator.clearFocus()
                 }
                 .onExitCommand {
                     editedValue = value
                     isEditing = false
+                    focusCoordinator.clearFocus()
+                }
+                .onChange(of: focusCoordinator.focusedField) { _, newValue in
+                    localFocus = newValue
+                }
+                .onChange(of: localFocus) { _, newValue in
+                    if newValue != focusCoordinator.focusedField {
+                        if let newValue = newValue {
+                            focusCoordinator.requestFocus(newValue)
+                        } else {
+                            focusCoordinator.clearFocus()
+                        }
+                    }
                 }
         } else {
             Text("\"\(value)\"")
@@ -336,7 +354,7 @@ struct JSONStringRowEditor: View {
                 .onTapGesture(count: 2) {
                     editedValue = value
                     isEditing = true
-                    isFocused = true
+                    focusCoordinator.requestFocus(fieldIdentifier)
                 }
                 .help("Double-click to edit")
         }
@@ -363,55 +381,77 @@ struct JSONBoolRowEditor: View {
 struct JSONNumberRowEditor: View {
     let value: NSNumber
     let onCommit: (NSNumber) -> Void
+    let fieldIdentifier: FieldIdentifier
+    let focusCoordinator: FieldFocusCoordinator
 
     @State private var editedValue: String = ""
     @State private var isEditing: Bool = false
-    @FocusState private var isFocused: Bool
-
-    private var isInteger: Bool {
-        CFNumberIsFloatType(value) == false
-    }
+    @FocusState private var localFocus: FieldIdentifier?
 
     var body: some View {
         if isEditing {
             TextField("Value", text: $editedValue)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(.body, design: .monospaced))
-                .focused($isFocused)
+                .focused($localFocus, equals: fieldIdentifier)
                 .onSubmit {
                     if let newNumber = parseNumber(editedValue) {
                         onCommit(newNumber)
                     } else {
                         // If parsing fails, revert to original value
-                        editedValue = value.stringValue
+                        editedValue = value.displayValue
                     }
                     isEditing = false
+                    focusCoordinator.clearFocus()
                 }
                 .onExitCommand {
-                    editedValue = value.stringValue
+                    editedValue = value.displayValue
                     isEditing = false
+                    focusCoordinator.clearFocus()
+                }
+                .onChange(of: focusCoordinator.focusedField) { _, newValue in
+                    localFocus = newValue
+                }
+                .onChange(of: localFocus) { _, newValue in
+                    if newValue != focusCoordinator.focusedField {
+                        if let newValue = newValue {
+                            focusCoordinator.requestFocus(newValue)
+                        } else {
+                            focusCoordinator.clearFocus()
+                        }
+                    }
                 }
         } else {
-            Text(value.stringValue)
+            Text(value.displayValue)
                 .font(.system(.body, design: .monospaced))
                 .foregroundStyle(.purple)
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) {
-                    editedValue = value.stringValue
+                    editedValue = value.displayValue
                     isEditing = true
-                    isFocused = true
+                    focusCoordinator.requestFocus(fieldIdentifier)
                 }
                 .help("Double-click to edit")
         }
     }
 
     private func parseNumber(_ string: String) -> NSNumber? {
-        if isInteger {
-            if let intValue = Int(string) {
-                return NSNumber(value: intValue)
+        // User's intent: if they type a decimal point, they want a float
+        // Otherwise, try to parse as integer first
+        let trimmed = string.trimmingCharacters(in: .whitespaces)
+
+        // Check if user included a decimal point (indicates float intent)
+        if trimmed.contains(".") {
+            if let doubleValue = Double(trimmed) {
+                return NSNumber(value: doubleValue)
             }
         } else {
-            if let doubleValue = Double(string) {
+            // No decimal point - try integer first
+            if let intValue = Int(trimmed) {
+                return NSNumber(value: intValue)
+            }
+            // Fallback to double for very large numbers that don't fit in Int
+            if let doubleValue = Double(trimmed) {
                 return NSNumber(value: doubleValue)
             }
         }
@@ -420,6 +460,8 @@ struct JSONNumberRowEditor: View {
 }
 
 #Preview {
+    let focusCoordinator = FieldFocusCoordinator()
+
     VStack(alignment: .leading, spacing: 0) {
         JSONNodeRowView(
             node: FlattenedNode(
@@ -434,7 +476,8 @@ struct JSONNumberRowEditor: View {
                 isCurrentMatch: false
             ),
             onToggleExpand: {},
-            onValueChange: { _, _ in }
+            onValueChange: { _, _ in },
+            focusCoordinator: focusCoordinator
         )
 
         JSONNodeRowView(
@@ -450,7 +493,8 @@ struct JSONNumberRowEditor: View {
                 isCurrentMatch: true
             ),
             onToggleExpand: {},
-            onValueChange: { _, _ in }
+            onValueChange: { _, _ in },
+            focusCoordinator: focusCoordinator
         )
 
         JSONNodeRowView(
@@ -466,7 +510,8 @@ struct JSONNumberRowEditor: View {
                 isCurrentMatch: false
             ),
             onToggleExpand: {},
-            onValueChange: { _, _ in }
+            onValueChange: { _, _ in },
+            focusCoordinator: focusCoordinator
         )
 
         JSONNodeRowView(
@@ -482,7 +527,8 @@ struct JSONNumberRowEditor: View {
                 isCurrentMatch: false
             ),
             onToggleExpand: {},
-            onValueChange: { _, _ in }
+            onValueChange: { _, _ in },
+            focusCoordinator: focusCoordinator
         )
     }
     .padding()

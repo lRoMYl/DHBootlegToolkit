@@ -52,11 +52,15 @@ struct S3DetailView: View {
     // Validation state
     @State private var validationResult: JSONSchemaValidationResult?
     @State private var showValidationPanel: Bool = true
+    @State private var isValidationPanelExpanded: Bool = false // Track expanded/collapsed state
     @State private var validationDebounceTask: Task<Void, Never>?
     @State private var isValidating: Bool = false
 
     // Scroll proxy for navigation to errors
     @State private var scrollProxy: ScrollViewProxy?
+
+    // Focus coordinator for managing TextField focus across the editor
+    @State private var focusCoordinator = FieldFocusCoordinator()
 
     var body: some View {
         if store.isLoading {
@@ -143,26 +147,10 @@ struct S3DetailView: View {
 
             Divider()
 
-            // Validation panel or loading indicator
-            if isValidating {
-                // Show loading state
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Validating configuration...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding()
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(8)
-                .padding(.horizontal)
-                .padding(.top, 8)
-            } else if let result = validationResult, !result.errors.isEmpty, showValidationPanel {
-                validationPanel(result: result)
-            }
-
             treeContentSection(country)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            validationOverlay
         }
         .task(id: country.id) {
             // Use task(id:) instead of onChange - fires on both initial appearance AND when ID changes
@@ -178,17 +166,51 @@ struct S3DetailView: View {
             Task { @MainActor in
                 await AppLogger.shared.time("S3 ConfigData onChange") {
                     if let json = country.parseConfigJSON() {
+                        // Clear stale validation errors immediately when data changes
+                        validationResult = .success
+
+                        // Set validating state IMMEDIATELY (before debounce delay)
+                        // This ensures loading indicator shows right away, preventing panel flash
+                        isValidating = true
+
                         // Debounce validation (300ms)
                         validationDebounceTask?.cancel()
                         validationDebounceTask = Task {
                             try? await Task.sleep(for: .milliseconds(300))
-                            guard !Task.isCancelled else { return }
+                            guard !Task.isCancelled else {
+                                // Reset validating state if task is cancelled
+                                await MainActor.run {
+                                    isValidating = false
+                                }
+                                return
+                            }
                             await MainActor.run {
                                 Task {
-                                    isValidating = true
+                                    // isValidating already true - just run validation
                                     let validation = await store.validateCountry(country)
-                                    validationResult = validation
-                                    isValidating = false
+
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        validationResult = validation
+                                        isValidating = false
+                                        // Collapse panel when new validation results arrive
+                                        isValidationPanelExpanded = false
+                                    }
+
+                                    // Reconfigure tree with new validation results
+                                    if let json = country.parseConfigJSON() {
+                                        treeViewModel.configure(
+                                            json: json,
+                                            expandAllByDefault: true,
+                                            manuallyCollapsed: treeViewModel.getManuallyCollapsed(),
+                                            originalJSON: currentHeadJSON,
+                                            fileGitStatus: country.gitStatus,
+                                            hasInMemoryChanges: country.hasChanges,
+                                            editedPaths: country.editedPaths,
+                                            showChangedFieldsOnly: showChangedFieldsOnly,
+                                            schema: store.parsedSchema,
+                                            validationResult: validation
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -267,6 +289,34 @@ struct S3DetailView: View {
         }
     }
 
+    // MARK: - Validation Overlay
+
+    @ViewBuilder
+    private var validationOverlay: some View {
+        // Validation panel or loading indicator (positioned at bottom right)
+        if isValidating {
+            // Show loading state as collapsed bubble with glass effect
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: 44, height: 44)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay {
+                    Circle()
+                        .strokeBorder(Color.blue.opacity(0.3), lineWidth: 1)
+                }
+                .shadow(color: Color.blue.opacity(0.15), radius: 8, x: 0, y: 2)
+                .padding(16)
+                .transition(.opacity)
+        } else if let result = validationResult, showValidationPanel {
+            // Always show validation panel (success or errors)
+            if isValidationPanelExpanded {
+                validationPanelExpanded(result: result)
+            } else {
+                validationPanelCollapsed(result: result)
+            }
+        }
+    }
+
     // MARK: - Search Bar Section
 
     private var searchBarSection: some View {
@@ -276,13 +326,15 @@ struct S3DetailView: View {
                 currentMatch: searchMatches.displayIndex,
                 totalMatches: searchMatches.count,
                 onNext: { searchMatches.next() },
-                onPrevious: { searchMatches.previous() }
+                onPrevious: { searchMatches.previous() },
+                focusCoordinator: focusCoordinator
             )
 
             Divider()
                 .frame(height: 20)
 
             Button {
+                focusCoordinator.clearFocus()
                 if treeViewModel.isAllExpanded {
                     treeViewModel.collapseAllExceptRoot()
                 } else {
@@ -298,6 +350,7 @@ struct S3DetailView: View {
             Button {
                 showChangedFieldsOnly.toggle()
                 treeViewModel.setShowChangedFieldsOnly(showChangedFieldsOnly)
+                focusCoordinator.clearFocus()
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "line.3.horizontal.decrease.circle")
@@ -338,12 +391,15 @@ struct S3DetailView: View {
                     searchMatches: searchMatches,
                     isReadOnly: isReadOnly,
                     onToggleExpand: { nodeId in
+                        // Clear focus when collapsing/expanding to prevent focus on hidden fields
+                        focusCoordinator.clearFocus()
                         treeViewModel.toggleExpand(nodeId)
                     },
                     onValueChange: { path, newValue in
                         store.updateValue(at: path, value: newValue)
                     },
                     onAddField: isReadOnly ? nil : { parentPath in
+                        focusCoordinator.clearFocus()
                         addFieldContext = AddFieldContext(parentPath: parentPath)
                     },
                     onDeleteField: isReadOnly ? nil : { path in
@@ -369,7 +425,8 @@ struct S3DetailView: View {
                         store.moveArrayElement(arrayPath: arrayPath, fromIndex: fromIndex, toIndex: toIndex)
                     },
                     pathsToExpand: pathsToExpand,
-                    scrollProxy: $scrollProxy
+                    scrollProxy: $scrollProxy,
+                    focusCoordinator: focusCoordinator
                 )
             // NOTE: Configuration is handled by parent-level task(id:) and onChange(of: configData)
             // No onAppear or onChange needed here - avoids race conditions from multiple config calls
@@ -390,6 +447,7 @@ struct S3DetailView: View {
         validationResult = nil
         isValidating = true
         showValidationPanel = true
+        isValidationPanelExpanded = false // Start collapsed for new country
 
         searchQuery = ""
         debouncedQuery = ""
@@ -400,8 +458,11 @@ struct S3DetailView: View {
         if let json = country.parseConfigJSON() {
             // Validate country configuration
             let validation = await store.validateCountry(country)
-            validationResult = validation
-            isValidating = false
+
+            withAnimation(.easeInOut(duration: 0.2)) {
+                validationResult = validation
+                isValidating = false
+            }
 
             // Configure tree immediately for fast rendering (no diff badges yet)
             currentHeadJSON = nil
@@ -505,42 +566,123 @@ struct S3DetailView: View {
         )
     }
 
-    @ViewBuilder
-    private func validationPanel(result: JSONSchemaValidationResult) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: result.errorCount > 0 ? "exclamationmark.triangle.fill" : "info.circle.fill")
-                    .foregroundStyle(result.errorCount > 0 ? .red : .orange)
+    // MARK: - Validation Panel Views
 
-                Text("\(result.errorCount) error\(result.errorCount == 1 ? "" : "s")\(result.warningCount > 0 ? ", \(result.warningCount) warning\(result.warningCount == 1 ? "" : "s")" : "")")
-                    .font(.headline)
+    /// Collapsed validation panel - shows as a compact circular indicator
+    @ViewBuilder
+    private func validationPanelCollapsed(result: JSONSchemaValidationResult) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                isValidationPanelExpanded = true
+            }
+        } label: {
+            ZStack {
+                if result.errorCount > 0 {
+                    // Error state: show icon with number badge
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(result.errorCount > 0 ? .red : .orange)
+                        .font(.title3)
+
+                    // Number badge in top-right
+                    Text("\(result.errorCount)")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                        .padding(4)
+                        .background(result.errorCount > 0 ? Color.red : Color.orange, in: Circle())
+                        .offset(x: 12, y: -12)
+                } else {
+                    // Success state: show checkmark
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.title3)
+                }
+            }
+            .frame(width: 44, height: 44)
+            .background(.ultraThinMaterial, in: Circle())
+            .overlay {
+                Circle()
+                    .strokeBorder(
+                        result.errorCount > 0
+                            ? (result.errorCount > 0 ? Color.red : Color.orange).opacity(0.3)
+                            : Color.green.opacity(0.3),
+                        lineWidth: 1
+                    )
+            }
+            .shadow(
+                color: result.errorCount > 0
+                    ? (result.errorCount > 0 ? Color.red : Color.orange).opacity(0.2)
+                    : Color.green.opacity(0.2),
+                radius: 8,
+                x: 0,
+                y: 2
+            )
+        }
+        .buttonStyle(.plain)
+        .padding(16)
+        .transition(.opacity)
+    }
+
+    /// Expanded validation panel - shows full details with error chips and glass effect
+    @ViewBuilder
+    private func validationPanelExpanded(result: JSONSchemaValidationResult) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: result.errorCount > 0 ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                    .foregroundStyle(result.errorCount > 0 ? .red : .green)
+                    .imageScale(.medium)
+
+                if result.errorCount > 0 {
+                    Text("\(result.errorCount) error\(result.errorCount == 1 ? "" : "s")\(result.warningCount > 0 ? ", \(result.warningCount) warning\(result.warningCount == 1 ? "" : "s")" : "")")
+                        .font(.headline)
+                } else {
+                    Text("Validation passed")
+                        .font(.headline)
+                        .foregroundStyle(.green)
+                }
 
                 Spacer()
 
                 Button {
-                    showValidationPanel = false
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        isValidationPanelExpanded = false
+                    }
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
+                    Image(systemName: "chevron.down.circle.fill")
                         .foregroundStyle(.secondary)
+                        .imageScale(.large)
                 }
                 .buttonStyle(.plain)
             }
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(result.errors) { error in
-                        ValidationErrorChip(error: error) {
-                            handleErrorTap(error)
+            if result.errorCount > 0 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(result.errors) { error in
+                            ValidationErrorChip(error: error) {
+                                handleErrorTap(error)
+                            }
                         }
                     }
                 }
+            } else {
+                Text("All schema validations passed successfully")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         }
-        .padding()
-        .background((result.errorCount > 0 ? Color.red : Color.orange).opacity(0.1))
-        .cornerRadius(8)
-        .padding(.horizontal)
-        .padding(.top, 8)
+        .frame(maxWidth: 500)
+        .padding(16)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder((result.errorCount > 0 ? Color.red : Color.green).opacity(0.3), lineWidth: 1)
+        }
+        .shadow(color: (result.errorCount > 0 ? Color.red : Color.green).opacity(0.2), radius: 12, x: 0, y: 4)
+        .padding(16)
+        .transition(.asymmetric(
+            insertion: .scale(scale: 0.8, anchor: .bottomTrailing).combined(with: .opacity),
+            removal: .scale(scale: 0.8, anchor: .bottomTrailing).combined(with: .opacity)
+        ))
     }
 }
 
@@ -552,7 +694,7 @@ struct ValidationErrorChip: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Image(systemName: error.severity == .error ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(error.severity == .error ? .red : .orange)
@@ -568,10 +710,13 @@ struct ValidationErrorChip: View {
                         .lineLimit(1)
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.secondary.opacity(0.1))
-            .cornerRadius(6)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder((error.severity == .error ? Color.red : Color.orange).opacity(0.2), lineWidth: 0.5)
+            }
         }
         .buttonStyle(.plain)
         .help("Click to navigate to this error")
@@ -595,6 +740,7 @@ struct S3TreeContentView: View {
     var onMoveArrayElement: ((_ arrayPath: [String], _ fromIndex: Int, _ toIndex: Int) -> Void)? = nil
     let pathsToExpand: ([String]?) -> Set<String>
     @Binding var scrollProxy: ScrollViewProxy?
+    let focusCoordinator: FieldFocusCoordinator
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -614,7 +760,8 @@ struct S3TreeContentView: View {
                                 store.selectNode(path: path, value: value)
                             },
                             isSelected: node.id == store.selectedNodePath,
-                            isReadOnly: isReadOnly
+                            isReadOnly: isReadOnly,
+                            focusCoordinator: focusCoordinator
                         )
                     }
                 }
@@ -646,7 +793,8 @@ struct S3SearchBar: View {
     let totalMatches: Int
     let onNext: () -> Void
     let onPrevious: () -> Void
-    @FocusState private var isFocused: Bool
+    let focusCoordinator: FieldFocusCoordinator
+    @FocusState private var localFocus: FieldIdentifier?
 
     var body: some View {
         HStack(spacing: 8) {
@@ -655,7 +803,7 @@ struct S3SearchBar: View {
 
             TextField("Search keys...", text: $searchQuery)
                 .textFieldStyle(.plain)
-                .focused($isFocused)
+                .focused($localFocus, equals: .searchBar)
 
             if !searchQuery.isEmpty {
                 matchCounterView
@@ -666,6 +814,18 @@ struct S3SearchBar: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(Color(nsColor: .controlBackgroundColor))
+        .onChange(of: focusCoordinator.focusedField) { _, newValue in
+            localFocus = newValue
+        }
+        .onChange(of: localFocus) { _, newValue in
+            if newValue != focusCoordinator.focusedField {
+                if let newValue = newValue {
+                    focusCoordinator.requestFocus(newValue)
+                } else {
+                    focusCoordinator.clearFocus()
+                }
+            }
+        }
     }
 
     @ViewBuilder
