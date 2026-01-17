@@ -488,6 +488,7 @@ struct TranslationFormView: View {
                                     endPoint: .bottom
                                 )
                             )
+                            .allowsHitTesting(false)
                     )
                 }
             }
