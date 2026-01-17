@@ -18,6 +18,7 @@ struct CounterBadge: View {
     let modified: Int
     let deleted: Int
     let type: CounterBadgeType
+    var tooltip: String? = nil
 
     private var hasChanges: Bool {
         added > 0 || modified > 0 || deleted > 0
@@ -63,10 +64,12 @@ struct CounterBadge: View {
             .font(BadgeStyle.font)
             .padding(.horizontal, BadgeStyle.counterPaddingH)
             .padding(.vertical, BadgeStyle.counterPaddingV)
+            .frame(minHeight: BadgeStyle.letterSize)
             .background(
                 RoundedRectangle(cornerRadius: BadgeStyle.cornerRadius, style: .continuous)
                     .stroke(Color.secondary.opacity(BadgeStyle.strokeOpacity), lineWidth: BadgeStyle.strokeWidth)
             )
+            .applyTooltip(tooltip)
         }
     }
 }
@@ -78,6 +81,7 @@ struct CustomCounterBadge<Icon: View>: View {
     let added: Int
     let modified: Int
     let deleted: Int
+    var tooltip: String? = nil
     @ViewBuilder let icon: () -> Icon
 
     private var hasChanges: Bool {
@@ -108,20 +112,22 @@ struct CustomCounterBadge<Icon: View>: View {
             .font(BadgeStyle.font)
             .padding(.horizontal, BadgeStyle.counterPaddingH)
             .padding(.vertical, BadgeStyle.counterPaddingV)
+            .frame(minHeight: BadgeStyle.letterSize)
             .background(
                 RoundedRectangle(cornerRadius: BadgeStyle.cornerRadius, style: .continuous)
                     .stroke(Color.secondary.opacity(BadgeStyle.strokeOpacity), lineWidth: BadgeStyle.strokeWidth)
             )
+            .applyTooltip(tooltip)
         }
     }
 }
 
 #Preview {
     VStack(spacing: 16) {
-        CounterBadge(added: 3, modified: 2, deleted: 1, type: .gitFiles)
-        CounterBadge(added: 5, modified: 0, deleted: 0, type: .keys)
-        CounterBadge(added: 0, modified: 1, deleted: 0, type: .gitFiles)
-        CustomCounterBadge(added: 2, modified: 1, deleted: 0) {
+        CounterBadge(added: 3, modified: 2, deleted: 1, type: .gitFiles, tooltip: "3 added, 2 modified, 1 deleted")
+        CounterBadge(added: 5, modified: 0, deleted: 0, type: .keys, tooltip: "5 new translation keys")
+        CounterBadge(added: 0, modified: 1, deleted: 0, type: .gitFiles, tooltip: "1 file modified")
+        CustomCounterBadge(added: 2, modified: 1, deleted: 0, tooltip: "2 added, 1 modified") {
             Image(systemName: "globe")
                 .font(BadgeStyle.font)
         }

@@ -47,6 +47,22 @@ enum JSONSchemaType: String, CaseIterable {
         }
     }
 
+    /// Default tooltip text for the type
+    var defaultTooltip: String {
+        switch self {
+        case .string: return BadgeStyle.TypeTooltip.string
+        case .int: return BadgeStyle.TypeTooltip.int
+        case .float: return BadgeStyle.TypeTooltip.float
+        case .bool: return BadgeStyle.TypeTooltip.bool
+        case .null: return BadgeStyle.TypeTooltip.null
+        case .stringArray: return BadgeStyle.TypeTooltip.stringArray
+        case .intArray: return BadgeStyle.TypeTooltip.intArray
+        case .object: return BadgeStyle.TypeTooltip.object
+        case .array: return BadgeStyle.TypeTooltip.array
+        case .any: return BadgeStyle.TypeTooltip.any
+        }
+    }
+
     /// Infers the schema type from a runtime value
     static func infer(from value: Any) -> JSONSchemaType {
         if value is [String: Any] {
@@ -84,23 +100,29 @@ enum JSONSchemaType: String, CaseIterable {
 // MARK: - Type Badge
 
 /// Badge displaying the type of a JSON field
-/// Matches StatusLetterBadge styling but with type labels
+/// Uses UnifiedBadge for consistent styling and tooltip support
 struct TypeBadge: View {
     let type: JSONSchemaType
 
     /// Whether this type was inferred (not from schema)
     var isInferred: Bool = true
 
+    /// Custom tooltip text (falls back to default type tooltip if nil)
+    var tooltip: String?
+
+    init(type: JSONSchemaType, isInferred: Bool = true, tooltip: String? = nil) {
+        self.type = type
+        self.isInferred = isInferred
+        self.tooltip = tooltip
+    }
+
     var body: some View {
-        Text(type.label)
-            .font(.caption2.weight(.medium).monospaced())
-            .foregroundStyle(type.color)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 1)
-            .background(
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .stroke(type.color.opacity(isInferred ? 0.3 : 0.5), lineWidth: 1)
-            )
+        UnifiedBadge(config: BadgeConfiguration(
+            contentType: .label(type.label),
+            color: type.color,
+            tooltip: tooltip ?? type.defaultTooltip,
+            strokeOpacity: isInferred ? 0.3 : 0.5
+        ))
     }
 }
 

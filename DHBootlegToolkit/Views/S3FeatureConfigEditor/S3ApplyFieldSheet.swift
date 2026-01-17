@@ -27,6 +27,7 @@ struct S3ApplyFieldSheet: View {
     @State private var isApplying: Bool = false
     @State private var countryFieldValues: [CountryFieldValue] = []
     @State private var sourceTreeViewModel = JSONTreeViewModel()
+    @State private var focusCoordinator = FieldFocusCoordinator()
 
     enum WizardStep {
         case selectCountries
@@ -110,7 +111,8 @@ struct S3ApplyFieldSheet: View {
                             node: node,
                             onToggleExpand: { sourceTreeViewModel.toggleExpand(node.id) },
                             onValueChange: { _, _ in },
-                            isReadOnly: true
+                            isReadOnly: true,
+                            focusCoordinator: focusCoordinator
                         )
                     }
                 }
@@ -216,7 +218,8 @@ struct S3ApplyFieldSheet: View {
                     ForEach($countryFieldValues) { $fieldValue in
                         CountryFieldPreviewCard(
                             fieldValue: $fieldValue,
-                            fieldPath: store.selectedNodePath ?? ""
+                            fieldPath: store.selectedNodePath ?? "",
+                            focusCoordinator: focusCoordinator
                         )
                     }
                 }
@@ -427,6 +430,7 @@ struct S3ApplyFieldSheet: View {
 struct CountryFieldPreviewCard: View {
     @Binding var fieldValue: CountryFieldValue
     let fieldPath: String
+    let focusCoordinator: FieldFocusCoordinator
 
     @State private var originalTreeViewModel = JSONTreeViewModel()
     @State private var newTreeViewModel = JSONTreeViewModel()
@@ -438,7 +442,7 @@ struct CountryFieldPreviewCard: View {
 
             // Original value section (if exists) - read-only
             if let currentValue = fieldValue.currentValue {
-                originalValueSection(currentValue)
+                originalValueSection(currentValue, coordinator: focusCoordinator)
             }
 
             // New value section - editable
@@ -482,7 +486,7 @@ struct CountryFieldPreviewCard: View {
 
     // MARK: - Original Value Section
 
-    private func originalValueSection(_ value: Any) -> some View {
+    private func originalValueSection(_ value: Any, coordinator: FieldFocusCoordinator) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text("Current Value:")
@@ -499,7 +503,8 @@ struct CountryFieldPreviewCard: View {
                         node: node,
                         onToggleExpand: { originalTreeViewModel.toggleExpand(node.id) },
                         onValueChange: { _, _ in },
-                        isReadOnly: true
+                        isReadOnly: true,
+                        focusCoordinator: coordinator
                     )
                 }
             }
@@ -537,7 +542,8 @@ struct CountryFieldPreviewCard: View {
                         onToggleExpand: { newTreeViewModel.toggleExpand(node.id) },
                         onValueChange: { path, newValue in
                             updateNewValue(at: path, with: newValue)
-                        }
+                        },
+                        focusCoordinator: focusCoordinator
                     )
                 }
             }
@@ -608,13 +614,19 @@ struct CountryFieldPreviewCard: View {
                 dict[key] = updateValueAtPath(in: existingValue, path: Array(path.dropFirst()), newValue: newValue)
             }
             return dict
-        } else if var array = value as? [Any], let index = Int(path[0]), index < array.count {
-            if path.count == 1 {
-                array[index] = newValue
-            } else {
-                array[index] = updateValueAtPath(in: array[index], path: Array(path.dropFirst()), newValue: newValue)
+        } else if var array = value as? [Any] {
+            // Strip brackets from array index (e.g., "[0]" -> "0")
+            let indexStr = path[0]
+                .replacingOccurrences(of: "[", with: "")
+                .replacingOccurrences(of: "]", with: "")
+            if let index = Int(indexStr), index < array.count {
+                if path.count == 1 {
+                    array[index] = newValue
+                } else {
+                    array[index] = updateValueAtPath(in: array[index], path: Array(path.dropFirst()), newValue: newValue)
+                }
+                return array
             }
-            return array
         }
 
         return value

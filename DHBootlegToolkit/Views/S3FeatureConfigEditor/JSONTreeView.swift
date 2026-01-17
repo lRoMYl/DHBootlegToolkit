@@ -443,15 +443,15 @@ struct JSONNumberEditor: View {
                     isEditing = false
                 }
                 .onExitCommand {
-                    editedValue = value.stringValue
+                    editedValue = value.displayValue
                     isEditing = false
                 }
         } else {
-            Text(value.stringValue)
+            Text(value.displayValue)
                 .font(.system(.body, design: .monospaced))
                 .foregroundStyle(.purple)
                 .onTapGesture(count: 2) {
-                    editedValue = value.stringValue
+                    editedValue = value.displayValue
                     isEditing = true
                     isFocused = true
                 }

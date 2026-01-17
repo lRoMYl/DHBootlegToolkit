@@ -39,14 +39,6 @@ struct MainSplitView: View {
             .toolbar(id: "git-toolbar") {
                 toolbarContent()
             }
-            .toolbar {
-                ToolbarItem(placement: .navigation) {
-                    SettingsLink {
-                        Image(systemName: "gearshape")
-                    }
-                    .help("Settings")
-                }
-            }
             .onChange(of: selectedSidebarTab) { _, newTab in
                 UserDefaults.standard.set(newTab.rawValue, forKey: Self.selectedModuleKey)
             }

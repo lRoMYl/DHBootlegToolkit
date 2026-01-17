@@ -120,6 +120,14 @@ struct SidebarView: View {
 
             Spacer(minLength: 0)
         }
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                SettingsLink {
+                    Image(systemName: "gearshape")
+                }
+                .help("Settings")
+            }
+        }
     }
 }
 

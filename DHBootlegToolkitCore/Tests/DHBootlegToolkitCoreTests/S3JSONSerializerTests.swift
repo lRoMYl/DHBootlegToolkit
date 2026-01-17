@@ -2165,3 +2165,749 @@ struct S3CountryConfigMissingParentPathTests {
         #expect(newRoot?["field"] as? String == "new_value")
     }
 }
+
+// MARK: - NSNumber Display Value Integration Tests
+
+@Suite("NSNumber Display Value Integration Tests")
+struct NSNumberDisplayValueIntegrationTests {
+
+    @Test("Display value matches serialization for integer")
+    func displayValueMatchesSerializationForInteger() {
+        let original = """
+        {
+          "timeout": 30,
+          "retries": 5
+        }
+        """
+
+        guard let data = original.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let timeout = json["timeout"] as? NSNumber else {
+            Issue.record("Failed to parse JSON")
+            return
+        }
+
+        // Verify displayValue matches how it would be serialized
+        #expect(timeout.displayValue == "30")
+
+        // Verify serialization preserves the format
+        let serialized = S3JSONSerializer.serialize(json, preservingOrderFrom: original)
+        #expect(serialized.contains("\"timeout\": 30"))
+        #expect(!serialized.contains("\"timeout\": 30.0"))
+    }
+
+    @Test("Display value matches serialization for float")
+    func displayValueMatchesSerializationForFloat() {
+        let original = """
+        {
+          "timeout": 30.0,
+          "retries": 5
+        }
+        """
+
+        guard let data = original.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let timeout = json["timeout"] as? NSNumber else {
+            Issue.record("Failed to parse JSON")
+            return
+        }
+
+        // Verify displayValue preserves decimal point
+        #expect(timeout.displayValue == "30.0")
+
+        // Verify serialization preserves the format
+        let serialized = S3JSONSerializer.serialize(json, preservingOrderFrom: original)
+        #expect(serialized.contains("\"timeout\": 30.0"))
+    }
+
+    @Test("Display value distinguishes between 30 and 30.0 in parsed JSON")
+    func displayValueDistinguishesBetweenIntAndFloatInJSON() {
+        let original = """
+        {
+          "intValue": 30,
+          "floatValue": 30.0
+        }
+        """
+
+        guard let data = original.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let intValue = json["intValue"] as? NSNumber,
+              let floatValue = json["floatValue"] as? NSNumber else {
+            Issue.record("Failed to parse JSON")
+            return
+        }
+
+        // Verify display values distinguish types
+        #expect(intValue.displayValue == "30")
+        #expect(floatValue.displayValue == "30.0")
+        #expect(intValue.displayValue != floatValue.displayValue)
+
+        // Verify serialization preserves both formats
+        let serialized = S3JSONSerializer.serialize(json, preservingOrderFrom: original)
+        #expect(serialized.contains("\"intValue\": 30"))
+        #expect(serialized.contains("\"floatValue\": 30.0"))
+    }
+
+    @Test("End-to-end: Parse, display, edit, serialize preserves float format")
+    func endToEndPreservesFloatFormat() {
+        let original = """
+        {
+          "config": {
+            "timeout": 30.0,
+            "retries": 30
+          }
+        }
+        """
+
+        guard let data = original.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let config = json["config"] as? [String: Any],
+              let timeout = config["timeout"] as? NSNumber,
+              let retries = config["retries"] as? NSNumber else {
+            Issue.record("Failed to parse JSON")
+            return
+        }
+
+        // Verify display values
+        #expect(timeout.displayValue == "30.0", "Float should display with decimal")
+        #expect(retries.displayValue == "30", "Integer should display without decimal")
+
+        // Verify serialization preserves formats
+        let serialized = S3JSONSerializer.serialize(json, preservingOrderFrom: original)
+        #expect(serialized.contains("\"timeout\": 30.0"))
+        #expect(serialized.contains("\"retries\": 30"))
+
+        // Verify no format artifacts
+        #expect(!serialized.contains("\"retries\": 30.0"))
+    }
+
+    @Test("Boolean display value matches serialization")
+    func booleanDisplayValueMatchesSerialization() {
+        let original = """
+        {
+          "enabled": true,
+          "disabled": false
+        }
+        """
+
+        guard let data = original.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let enabled = json["enabled"] as? NSNumber,
+              let disabled = json["disabled"] as? NSNumber else {
+            Issue.record("Failed to parse JSON")
+            return
+        }
+
+        // Verify display values for booleans
+        #expect(enabled.displayValue == "true")
+        #expect(disabled.displayValue == "false")
+
+        // Verify serialization uses same format
+        let serialized = S3JSONSerializer.serialize(json, preservingOrderFrom: original)
+        #expect(serialized.contains("\"enabled\": true"))
+        #expect(serialized.contains("\"disabled\": false"))
+    }
+
+    @Test("S3CountryConfig integration: display and serialization consistency")
+    func countryConfigDisplaySerializationConsistency() {
+        let original = """
+        {
+          "data": {
+            "timeout": 30.0,
+            "retries": 30,
+            "enabled": true
+          }
+        }
+        """
+
+        let config = S3CountryConfig(
+            countryCode: "sg",
+            configURL: URL(fileURLWithPath: "/tmp/sg/config.json"),
+            configData: original.data(using: .utf8),
+            originalContent: original,
+            hasChanges: false
+        )
+
+        guard let json = config.parseConfigJSON(),
+              let dataDict = json["data"] as? [String: Any],
+              let timeout = dataDict["timeout"] as? NSNumber,
+              let retries = dataDict["retries"] as? NSNumber,
+              let enabled = dataDict["enabled"] as? NSNumber else {
+            Issue.record("Failed to parse config JSON")
+            return
+        }
+
+        // Verify display values match expected serialization format
+        #expect(timeout.displayValue == "30.0")
+        #expect(retries.displayValue == "30")
+        #expect(enabled.displayValue == "true")
+
+        // Verify original content preserves correct formats
+        #expect(config.originalContent?.contains("\"timeout\": 30.0") == true)
+        #expect(config.originalContent?.contains("\"retries\": 30") == true)
+        #expect(config.originalContent?.contains("\"enabled\": true") == true)
+    }
+
+    @Test("Negative float display matches serialization")
+    func negativeFloatDisplayMatchesSerialization() {
+        let original = """
+        {
+          "offset": -30.0,
+          "count": -30
+        }
+        """
+
+        guard let data = original.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let offset = json["offset"] as? NSNumber,
+              let count = json["count"] as? NSNumber else {
+            Issue.record("Failed to parse JSON")
+            return
+        }
+
+        // Verify display values
+        #expect(offset.displayValue == "-30.0")
+        #expect(count.displayValue == "-30")
+
+        // Verify serialization
+        let serialized = S3JSONSerializer.serialize(json, preservingOrderFrom: original)
+        #expect(serialized.contains("\"offset\": -30.0"))
+        #expect(serialized.contains("\"count\": -30"))
+    }
+
+    @Test("Large float display matches serialization")
+    func largeFloatDisplayMatchesSerialization() {
+        let original = """
+        {
+          "largeFloat": 1000000.0,
+          "largeInt": 1000000
+        }
+        """
+
+        guard let data = original.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let largeFloat = json["largeFloat"] as? NSNumber,
+              let largeInt = json["largeInt"] as? NSNumber else {
+            Issue.record("Failed to parse JSON")
+            return
+        }
+
+        // Verify display values
+        #expect(largeFloat.displayValue == "1000000.0")
+        #expect(largeInt.displayValue == "1000000")
+
+        // Verify serialization
+        let serialized = S3JSONSerializer.serialize(json, preservingOrderFrom: original)
+        #expect(serialized.contains("\"largeFloat\": 1000000.0"))
+        #expect(serialized.contains("\"largeInt\": 1000000"))
+    }
+}
+
+// MARK: - Array Element Save Tests (Bracket Notation)
+
+@Suite("S3JSONSerializer Array Element Save Tests")
+struct S3JSONSerializerArrayElementSaveTests {
+
+    @Test("Replace array element with bracket notation path")
+    func replaceArrayElementWithBracketNotation() {
+        let original = """
+        {
+          "items": [30.0, 40, 50]
+        }
+        """
+
+        // Path with bracket notation as used by JSONTreeView
+        let result = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["items", "[0]"],
+            with: 30  // Change from 30.0 to 30
+        )
+
+        #expect(result != nil, "Targeted replacement should succeed")
+        #expect(result?.contains("\"items\": [30, 40, 50]") == true)
+    }
+
+    @Test("Replace nested array element with bracket notation")
+    func replaceNestedArrayElementWithBracketNotation() {
+        let original = """
+        {
+          "data": {
+            "values": [10, 20, 30]
+          }
+        }
+        """
+
+        let result = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["data", "values", "[1]"],
+            with: 25
+        )
+
+        #expect(result != nil)
+        #expect(result?.contains("[10, 25, 30]") == true)
+    }
+
+    @Test("Replace array element with different types")
+    func replaceArrayElementWithDifferentTypes() {
+        let original = """
+        {
+          "mixed": [true, "text", 42]
+        }
+        """
+
+        // Test boolean
+        let result1 = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["mixed", "[0]"],
+            with: false
+        )
+        #expect(result1?.contains("[false,") == true)
+
+        // Test string
+        let result2 = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["mixed", "[1]"],
+            with: "updated"
+        )
+        #expect(result2?.contains("\"updated\"") == true)
+
+        // Test number
+        let result3 = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["mixed", "[2]"],
+            with: 99
+        )
+        #expect(result3?.contains(", 99]") == true)
+    }
+
+    @Test("countObjectDepth handles bracket notation correctly")
+    func countObjectDepthWithBracketNotation() {
+        // This is an internal method, test it indirectly via replaceValue
+        let original = """
+        {
+          "level1": {
+            "array": [
+              {"nested": "value"}
+            ]
+          }
+        }
+        """
+
+        // Path: level1 -> array -> [0] -> nested
+        // Depth should be: 1 (root) + 1 (level1) + 1 (object in array) = 3
+        let result = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["level1", "array", "[0]", "nested"],
+            with: "updated"
+        )
+
+        #expect(result != nil, "Should correctly navigate through array with bracket notation")
+        #expect(result?.contains("\"nested\": \"updated\"") == true)
+    }
+
+    @Test("Replace first array element with bracket notation")
+    func replaceFirstArrayElementWithBracketNotation() {
+        let original = """
+        {
+          "numbers": [1, 2, 3, 4, 5]
+        }
+        """
+
+        let result = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["numbers", "[0]"],
+            with: 100
+        )
+
+        #expect(result != nil)
+        #expect(result?.contains("[100, 2, 3, 4, 5]") == true)
+    }
+
+    @Test("Replace last array element with bracket notation")
+    func replaceLastArrayElementWithBracketNotation() {
+        let original = """
+        {
+          "numbers": [1, 2, 3, 4, 5]
+        }
+        """
+
+        let result = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["numbers", "[4]"],
+            with: 500
+        )
+
+        #expect(result != nil)
+        #expect(result?.contains("[1, 2, 3, 4, 500]") == true)
+    }
+
+    @Test("Replace middle array element with bracket notation")
+    func replaceMiddleArrayElementWithBracketNotation() {
+        let original = """
+        {
+          "numbers": [1, 2, 3, 4, 5]
+        }
+        """
+
+        let result = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["numbers", "[2]"],
+            with: 300
+        )
+
+        #expect(result != nil)
+        #expect(result?.contains("[1, 2, 300, 4, 5]") == true)
+    }
+
+    @Test("Replace multiline array element with bracket notation")
+    func replaceMultilineArrayElementWithBracketNotation() {
+        let original = """
+        {
+          "items": [
+            30.0,
+            40,
+            50
+          ]
+        }
+        """
+
+        let result = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["items", "[0]"],
+            with: 30
+        )
+
+        #expect(result != nil)
+        #expect(result?.contains("30,") == true)
+        #expect(result?.contains("30.0") == false)
+    }
+
+    @Test("Replace array of objects element with bracket notation")
+    func replaceArrayOfObjectsElementWithBracketNotation() {
+        let original = """
+        {
+          "users": [
+            {"name": "Alice", "age": 30},
+            {"name": "Bob", "age": 25}
+          ]
+        }
+        """
+
+        let result = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["users", "[1]", "age"],
+            with: 26
+        )
+
+        #expect(result != nil)
+        #expect(result?.contains("\"age\": 26") == true)
+        #expect(result?.contains("\"age\": 30") == true)  // First element unchanged
+    }
+}
+
+// MARK: - Object Save Tests
+
+@Suite("S3JSONSerializer Object Save Tests")
+struct S3JSONSerializerObjectSaveTests {
+
+    @Test("Replace nested object property")
+    func replaceNestedObjectProperty() {
+        let original = """
+        {
+          "config": {
+            "theme": "dark",
+            "fontSize": 14,
+            "enabled": true
+          }
+        }
+        """
+
+        let result = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["config", "theme"],
+            with: "light"
+        )
+
+        #expect(result != nil)
+        #expect(result?.contains("\"theme\": \"light\"") == true)
+        #expect(result?.contains("\"fontSize\": 14") == true)
+        #expect(result?.contains("\"enabled\": true") == true)
+    }
+
+    @Test("Replace deeply nested object property")
+    func replaceDeeplyNestedObjectProperty() {
+        let original = """
+        {
+          "level1": {
+            "level2": {
+              "level3": {
+                "value": "original"
+              }
+            }
+          }
+        }
+        """
+
+        let result = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["level1", "level2", "level3", "value"],
+            with: "updated"
+        )
+
+        #expect(result != nil)
+        #expect(result?.contains("\"value\": \"updated\"") == true)
+    }
+
+    @Test("Replace object property preserves sibling properties")
+    func replaceObjectPropertyPreservesSiblings() {
+        let original = """
+        {
+          "data": {
+            "field1": "value1",
+            "field2": "value2",
+            "field3": "value3"
+          }
+        }
+        """
+
+        let result = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["data", "field2"],
+            with: "updated"
+        )
+
+        #expect(result != nil)
+        #expect(result?.contains("\"field1\": \"value1\"") == true)
+        #expect(result?.contains("\"field2\": \"updated\"") == true)
+        #expect(result?.contains("\"field3\": \"value3\"") == true)
+    }
+
+    @Test("Replace object property in mixed structure")
+    func replaceObjectPropertyInMixedStructure() {
+        let original = """
+        {
+          "users": [
+            {
+              "name": "Alice",
+              "settings": {
+                "theme": "dark",
+                "notifications": true
+              }
+            }
+          ]
+        }
+        """
+
+        let result = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["users", "[0]", "settings", "theme"],
+            with: "light"
+        )
+
+        #expect(result != nil)
+        #expect(result?.contains("\"theme\": \"light\"") == true)
+        #expect(result?.contains("\"name\": \"Alice\"") == true)
+        #expect(result?.contains("\"notifications\": true") == true)
+    }
+
+    @Test("Replace multiple object properties sequentially")
+    func replaceMultipleObjectPropertiesSequentially() {
+        let original = """
+        {
+          "config": {
+            "prop1": "value1",
+            "prop2": "value2",
+            "prop3": "value3"
+          }
+        }
+        """
+
+        // First replacement
+        let result1 = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["config", "prop1"],
+            with: "updated1"
+        )
+        #expect(result1 != nil)
+
+        // Second replacement on result
+        let result2 = S3JSONSerializer.replaceValue(
+            in: result1!,
+            at: ["config", "prop2"],
+            with: "updated2"
+        )
+        #expect(result2 != nil)
+
+        // Third replacement on result
+        let result3 = S3JSONSerializer.replaceValue(
+            in: result2!,
+            at: ["config", "prop3"],
+            with: "updated3"
+        )
+        #expect(result3 != nil)
+
+        // Verify all changes applied
+        #expect(result3?.contains("\"prop1\": \"updated1\"") == true)
+        #expect(result3?.contains("\"prop2\": \"updated2\"") == true)
+        #expect(result3?.contains("\"prop3\": \"updated3\"") == true)
+    }
+
+    @Test("Replace object property with different value types")
+    func replaceObjectPropertyWithDifferentValueTypes() {
+        let original = """
+        {
+          "data": {
+            "stringValue": "text",
+            "numberValue": 42,
+            "boolValue": true,
+            "nullValue": null
+          }
+        }
+        """
+
+        // Replace string
+        let result1 = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["data", "stringValue"],
+            with: "updated"
+        )
+        #expect(result1?.contains("\"stringValue\": \"updated\"") == true)
+
+        // Replace number
+        let result2 = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["data", "numberValue"],
+            with: 100
+        )
+        #expect(result2?.contains("\"numberValue\": 100") == true)
+
+        // Replace boolean
+        let result3 = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["data", "boolValue"],
+            with: false
+        )
+        #expect(result3?.contains("\"boolValue\": false") == true)
+
+        // Replace null
+        let result4 = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["data", "nullValue"],
+            with: "no longer null"
+        )
+        #expect(result4?.contains("\"nullValue\": \"no longer null\"") == true)
+    }
+}
+
+// MARK: - Number Type Change Tests
+
+@Suite("Number Type Change Tests")
+struct NumberTypeChangeTests {
+
+    @Test("Serialize integer NSNumber as integer")
+    func serializeIntegerNSNumberAsInteger() {
+        let original = """
+        {
+          "value": 5.0
+        }
+        """
+
+        // User wants to change to integer
+        let intNumber = NSNumber(value: 3)  // Create as Int
+
+        let result = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["value"],
+            with: intNumber
+        )
+
+        #expect(result != nil)
+        #expect(result?.contains("\"value\": 3") == true, "Should serialize as integer without decimal")
+        #expect(result?.contains("\"value\": 3.0") == false, "Should NOT serialize with decimal")
+    }
+
+    @Test("Serialize float NSNumber as float")
+    func serializeFloatNSNumberAsFloat() {
+        let original = """
+        {
+          "value": 3
+        }
+        """
+
+        // User wants to change to float
+        let floatNumber = NSNumber(value: 3.0)  // Create as Double
+
+        let result = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["value"],
+            with: floatNumber
+        )
+
+        #expect(result != nil)
+        #expect(result?.contains("\"value\": 3.0") == true, "Should serialize as float with decimal")
+        #expect(result?.contains("\"value\": 3\n") == false, "Should NOT serialize as bare integer")
+    }
+
+    @Test("Change float to integer in array element")
+    func changeFloatToIntegerInArrayElement() {
+        let original = """
+        {
+          "items": [5.0, 10.0, 15.0]
+        }
+        """
+
+        // User changes first element from 5.0 to 3 (integer)
+        let intNumber = NSNumber(value: 3)
+
+        let result = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["items", "[0]"],
+            with: intNumber
+        )
+
+        #expect(result != nil)
+        #expect(result?.contains("[3, 10.0, 15.0]") == true)
+        #expect(result?.contains("[3.0,") == false)
+    }
+
+    @Test("Change integer to float")
+    func changeIntegerToFloat() {
+        let original = """
+        {
+          "timeout": 30
+        }
+        """
+
+        // User changes from 30 to 30.0 (float)
+        let floatNumber = NSNumber(value: 30.0)
+
+        let result = S3JSONSerializer.replaceValue(
+            in: original,
+            at: ["timeout"],
+            with: floatNumber
+        )
+
+        #expect(result != nil)
+        #expect(result?.contains("\"timeout\": 30.0") == true)
+    }
+
+    @Test("NSNumber type detection - Int vs Double")
+    func nsNumberTypeDetection() {
+        // Verify NSNumber created from Int is integer type
+        let intNumber = NSNumber(value: 3)
+        #expect(CFNumberIsFloatType(intNumber) == false, "NSNumber(value: 3) should be integer type")
+
+        // Verify NSNumber created from Double is float type
+        let doubleNumber = NSNumber(value: 3.0)
+        #expect(CFNumberIsFloatType(doubleNumber) == true, "NSNumber(value: 3.0) should be float type")
+
+        // Verify they serialize differently
+        let original = "{\"a\": 0, \"b\": 0.0}"
+
+        let result1 = S3JSONSerializer.replaceValue(in: original, at: ["a"], with: intNumber)
+        #expect(result1?.contains("\"a\": 3") == true)
+
+        let result2 = S3JSONSerializer.replaceValue(in: original, at: ["b"], with: doubleNumber)
+        #expect(result2?.contains("\"b\": 3.0") == true)
+    }
+}

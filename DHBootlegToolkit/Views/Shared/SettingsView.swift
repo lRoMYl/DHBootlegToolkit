@@ -1,32 +1,85 @@
 import SwiftUI
+import AppKit
 import DHBootlegToolkitCore
 
 struct SettingsView: View {
     @Environment(AppStore.self) private var store
+    @Environment(S3Store.self) private var s3Store
     @Environment(StockTickerStore.self) private var stockTickerStore
     @State private var showResetConfirmation = false
 
     var body: some View {
         Form {
-            Section("Repository") {
-                if let repoURL = store.repositoryURL {
-                    LabeledContent("Current Repository") {
-                        Text(repoURL.path)
-                            .foregroundStyle(.secondary)
-                    }
+            Section("Repositories") {
+                // Localization Repository
+                LabeledContent {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        if let repoURL = store.repositoryURL {
+                            Text(repoURL.path)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .frame(maxWidth: 250, alignment: .trailing)
 
-                    Button("Change Repository...") {
-                        store.showRepositoryPicker()
+                            Button("Change...") {
+                                store.showRepositoryPicker()
+                            }
+                            .controlSize(.small)
+                        } else {
+                            Button("Select...") {
+                                store.showRepositoryPicker()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                        }
                     }
-                } else {
-                    Text("No repository selected")
-                        .foregroundStyle(.secondary)
-
-                    Button("Select Repository...") {
-                        store.showRepositoryPicker()
-                    }
-                    .buttonStyle(.borderedProminent)
+                } label: {
+                    Text("Localization")
                 }
+
+                // S3 Config Repository
+                LabeledContent {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        if let repoURL = s3Store.s3RepositoryURL {
+                            Text(repoURL.path)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .frame(maxWidth: 250, alignment: .trailing)
+
+                            Button("Change...") {
+                                selectS3Repository()
+                            }
+                            .controlSize(.small)
+                        } else {
+                            Button("Select...") {
+                                selectS3Repository()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                        }
+                    }
+                } label: {
+                    Text("S3 Config")
+                }
+            }
+
+            Section("Maintenance") {
+                Button("Clear Stock Cache") {
+                    clearStockCache()
+                    stockTickerStore.clearCache()
+                }
+
+                Button("Clear Repository Settings") {
+                    clearRepositorySettings()
+                }
+
+                Button("Reset All Settings...") {
+                    showResetConfirmation = true
+                }
+                .foregroundStyle(.red)
             }
 
             Section("Git Configuration") {
@@ -37,10 +90,6 @@ struct SettingsView: View {
 
                     LabeledContent("Email") {
                         Text(store.gitStatus.userEmail ?? "Not set")
-                    }
-
-                    LabeledContent("Current Branch") {
-                        Text(store.gitStatus.currentBranch ?? "None")
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 8) {
@@ -59,23 +108,6 @@ struct SettingsView: View {
                         .background(Color(nsColor: .textBackgroundColor))
                         .clipShape(RoundedRectangle(cornerRadius: 4))
                     }
-                }
-            }
-
-            Section("Reset") {
-                HStack {
-                    Button("Clear Stock Cache") {
-                        clearStockCache()
-                        stockTickerStore.clearCache()
-                    }
-
-                    Button("Clear Repository Settings") {
-                        clearRepositorySettings()
-                    }
-                }
-
-                Button("Reset All Settings...", role: .destructive) {
-                    showResetConfirmation = true
                 }
             }
 
@@ -98,6 +130,23 @@ struct SettingsView: View {
             }
         } message: {
             Text("This will clear all cached data and settings. The app will restart.")
+        }
+    }
+
+    // MARK: - Repository Selection
+
+    private func selectS3Repository() {
+        let panel = NSOpenPanel()
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = "Select the root of your S3 config repository"
+
+        if panel.runModal() == .OK, let url = panel.url {
+            Task {
+                await s3Store.loadRepository(at: url)
+            }
         }
     }
 
@@ -138,5 +187,6 @@ struct SettingsView: View {
 #Preview {
     SettingsView()
         .environment(AppStore())
+        .environment(S3Store())
         .environment(StockTickerStore())
 }

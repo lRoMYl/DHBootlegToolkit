@@ -195,7 +195,11 @@ public enum S3JSONSerializer {
                 if char == "{" || char == "[" {
                     // Check if we're entering an array and the next path component is an index
                     if char == "[" && pathIndex < pathComponents.count {
-                        if let arrayIndex = Int(pathComponents[pathIndex]) {
+                        // Strip brackets from array index (e.g., "[0]" -> "0")
+                        let indexStr = pathComponents[pathIndex]
+                            .replacingOccurrences(of: "[", with: "")
+                            .replacingOccurrences(of: "]", with: "")
+                        if let arrayIndex = Int(indexStr) {
                             // Find the element at this index
                             if let elementRange = findArrayElementRange(in: content, from: currentIndex, index: arrayIndex) {
                                 if pathIndex == pathComponents.count - 1 {
@@ -227,7 +231,11 @@ public enum S3JSONSerializer {
     private static func countObjectDepth(in pathComponents: [String], upTo index: Int) -> Int {
         var depth = 1 // Start at 1 for the root object
         for i in 0..<index {
-            if Int(pathComponents[i]) == nil {
+            // Strip brackets to check if this is an array index
+            let stripped = pathComponents[i]
+                .replacingOccurrences(of: "[", with: "")
+                .replacingOccurrences(of: "]", with: "")
+            if Int(stripped) == nil {
                 // Not an array index, so it's an object key
                 depth += 1
             }

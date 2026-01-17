@@ -10,6 +10,7 @@ let package = Package(
     targets: [
         .target(
             name: "DHBootlegToolkitCore",
+            exclude: ["Documentation/CommentarySources.md"],
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency")
             ]
