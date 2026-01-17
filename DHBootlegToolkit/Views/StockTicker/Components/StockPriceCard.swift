@@ -131,6 +131,7 @@ struct StockPriceCard: View {
     }
 }
 
+#if DEBUG
 #Preview("Up") {
     StockPriceCard(stock: .mockDHER, isConnected: true)
         .padding()
@@ -142,3 +143,4 @@ struct StockPriceCard: View {
         .padding()
         .frame(width: 600)
 }
+#endif

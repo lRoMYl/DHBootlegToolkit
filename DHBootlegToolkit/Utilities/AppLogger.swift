@@ -14,7 +14,7 @@ struct TimingGroupContext {
     }
 
     /// Times an async operation within this group
-    func time<T>(_ name: String, _ work: () async throws -> T) async rethrows -> T {
+    func time<T: Sendable>(_ name: String, _ work: () async throws -> T) async rethrows -> T {
         try await logger.time(name, group: group, work)
     }
 
@@ -67,7 +67,7 @@ final class AppLogger {
     // MARK: - Timing Methods
 
     /// Times an async operation and logs start/completion with duration
-    func time<T>(_ name: String, _ work: () async throws -> T) async rethrows -> T {
+    func time<T: Sendable>(_ name: String, _ work: () async throws -> T) async rethrows -> T {
         log(.timing, "\(name)...", isTimingStart: true)
         let start = CFAbsoluteTimeGetCurrent()
         let result = try await work()
@@ -99,7 +99,7 @@ final class AppLogger {
     // MARK: - Group Timing Methods (Option A)
 
     /// Times an async operation within a group and logs start/completion with duration
-    func time<T>(_ name: String, group: TimingGroup, _ work: () async throws -> T) async rethrows -> T {
+    func time<T: Sendable>(_ name: String, group: TimingGroup, _ work: () async throws -> T) async rethrows -> T {
         // Start group timing on first call
         if groupStartTimes[group.id] == nil {
             groupStartTimes[group.id] = CFAbsoluteTimeGetCurrent()
@@ -148,7 +148,7 @@ final class AppLogger {
     // MARK: - Scoped Group Timing (Option B)
 
     /// Times a group of operations using a scoped closure
-    func timedGroup<T>(_ name: String, _ work: (TimingGroupContext) async throws -> T) async rethrows -> T {
+    func timedGroup<T: Sendable>(_ name: String, _ work: (TimingGroupContext) async throws -> T) async rethrows -> T {
         let group = TimingGroup(name)
         let context = TimingGroupContext(group: group, logger: self)
         groupStartTimes[group.id] = CFAbsoluteTimeGetCurrent()

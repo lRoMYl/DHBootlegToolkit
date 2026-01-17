@@ -46,6 +46,7 @@ struct StockTickerDetailView: View {
     }
 }
 
+#if DEBUG
 #Preview {
     DetailViewPreview()
 }
@@ -68,3 +69,4 @@ private struct DetailViewPreview: View {
             .frame(width: 800, height: 600)
     }
 }
+#endif

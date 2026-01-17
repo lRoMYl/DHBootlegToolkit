@@ -442,6 +442,7 @@ struct StockChartView: View {
     }
 }
 
+#if DEBUG
 #Preview {
     @Previewable @State var store = StockTickerStore()
 
@@ -450,3 +451,4 @@ struct StockChartView: View {
         .padding()
         .frame(width: 700)
 }
+#endif
