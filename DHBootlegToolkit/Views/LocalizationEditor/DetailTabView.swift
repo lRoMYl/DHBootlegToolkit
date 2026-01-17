@@ -296,41 +296,32 @@ struct NewKeyWizard: View {
     @Environment(AppStore.self) private var store
     let feature: FeatureFolder
 
-    @State private var currentStep: WizardStep = .screenshot
-    @State private var screenshotURL: URL?
-    @State private var generatedScreenshotName: String = ""
-    @State private var keyName: String = ""
-    @State private var translation: String = ""
-    @State private var notes: String = ""
-    @State private var targetLanguagesText: String = ""
-    @State private var charLimit: Int?
+    // Transient UI state (doesn't need to persist across tab switches)
     @State private var keyValidationError: String?
     @State private var isDropTargeted = false
     @State private var isCreating = false
 
-    // Error handling state
+    // Error handling state (transient)
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var showOverwriteConfirmation = false
     @State private var pendingNewKey: TranslationKey?
     @State private var pendingScreenshot: PendingScreenshot?
 
-    enum WizardStep: Int, CaseIterable {
-        case screenshot = 0
-        case keyDetails = 1
-        case review = 2
+    // Local form state - isolated from store observation to prevent simultaneous access
+    @State private var localKeyName = ""
+    @State private var localTranslation = ""
+    @State private var localNotes = ""
+    @State private var localTargetLanguagesText = ""
+    @State private var localCharLimit: Int?
+    @State private var localCurrentStep: NewKeyFormData.WizardStep = .screenshot
+    @State private var localScreenshotURL: URL?
+    @State private var localGeneratedScreenshotName = ""
 
-        var title: String {
-            switch self {
-            case .screenshot: return "Add Screenshot"
-            case .keyDetails: return "Key Details"
-            case .review: return "Review & Create"
-            }
-        }
+    // Use NewKeyFormData.WizardStep instead of local enum
+    private typealias WizardStep = NewKeyFormData.WizardStep
 
-        var stepNumber: Int { rawValue + 1 }
-        var totalSteps: Int { WizardStep.allCases.count }
-    }
+    // MARK: - Body
 
     var body: some View {
         VStack(spacing: 0) {
@@ -342,7 +333,7 @@ struct NewKeyWizard: View {
             // Content
             ScrollView {
                 VStack(spacing: 20) {
-                    switch currentStep {
+                    switch localCurrentStep {
                     case .screenshot:
                         screenshotStep
                     case .keyDetails:
@@ -359,6 +350,8 @@ struct NewKeyWizard: View {
             // Navigation buttons
             navigationButtons
         }
+        .onAppear { loadFromStore() }
+        .onDisappear { saveToStore() }
         .alert("Save Error", isPresented: $showError) {
             Button("OK") { }
         } message: {
@@ -377,6 +370,38 @@ struct NewKeyWizard: View {
         }
     }
 
+    // MARK: - Store Sync
+
+    private func loadFromStore() {
+        guard let formData = store.newKeyFormData else {
+            // Initialize store form data if needed
+            store.newKeyFormData = NewKeyFormData()
+            return
+        }
+        localKeyName = formData.keyName
+        localTranslation = formData.translation
+        localNotes = formData.notes
+        localTargetLanguagesText = formData.targetLanguagesText
+        localCharLimit = formData.charLimit
+        localCurrentStep = formData.currentStep
+        localScreenshotURL = formData.screenshotURL
+        localGeneratedScreenshotName = formData.generatedScreenshotName
+    }
+
+    private func saveToStore() {
+        if store.newKeyFormData == nil {
+            store.newKeyFormData = NewKeyFormData()
+        }
+        store.newKeyFormData?.keyName = localKeyName
+        store.newKeyFormData?.translation = localTranslation
+        store.newKeyFormData?.notes = localNotes
+        store.newKeyFormData?.targetLanguagesText = localTargetLanguagesText
+        store.newKeyFormData?.charLimit = localCharLimit
+        store.newKeyFormData?.currentStep = localCurrentStep
+        store.newKeyFormData?.screenshotURL = localScreenshotURL
+        store.newKeyFormData?.generatedScreenshotName = localGeneratedScreenshotName
+    }
+
     // MARK: - Header
 
     private var wizardHeader: some View {
@@ -389,23 +414,23 @@ struct NewKeyWizard: View {
                 ForEach(WizardStep.allCases, id: \.rawValue) { step in
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(step.rawValue <= currentStep.rawValue ? Color.accentColor : Color.secondary.opacity(0.3))
+                            .fill(step.rawValue <= localCurrentStep.rawValue ? Color.accentColor : Color.secondary.opacity(0.3))
                             .frame(width: 24, height: 24)
                             .overlay {
-                                if step.rawValue < currentStep.rawValue {
+                                if step.rawValue < localCurrentStep.rawValue {
                                     Image(systemName: "checkmark")
                                         .font(.caption.bold())
                                         .foregroundStyle(.white)
                                 } else {
                                     Text("\(step.stepNumber)")
                                         .font(.caption.bold())
-                                        .foregroundStyle(step.rawValue <= currentStep.rawValue ? .white : .secondary)
+                                        .foregroundStyle(step.rawValue <= localCurrentStep.rawValue ? .white : .secondary)
                                 }
                             }
 
                         if step != WizardStep.allCases.last {
                             Rectangle()
-                                .fill(step.rawValue < currentStep.rawValue ? Color.accentColor : Color.secondary.opacity(0.3))
+                                .fill(step.rawValue < localCurrentStep.rawValue ? Color.accentColor : Color.secondary.opacity(0.3))
                                 .frame(height: 2)
                                 .frame(maxWidth: 40)
                         }
@@ -413,7 +438,7 @@ struct NewKeyWizard: View {
                 }
             }
 
-            Text(currentStep.title)
+            Text(localCurrentStep.title)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -430,7 +455,7 @@ struct NewKeyWizard: View {
 
             // Drop zone
             VStack(spacing: 12) {
-                if let url = screenshotURL {
+                if let url = localScreenshotURL {
                     // Show selected screenshot
                     VStack(spacing: 8) {
                         if let image = NSImage(contentsOf: url) {
@@ -445,7 +470,7 @@ struct NewKeyWizard: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
                             VStack(alignment: .leading) {
-                                Text(generatedScreenshotName)
+                                Text(localGeneratedScreenshotName)
                                     .font(.headline)
                                 Text("from: \(url.lastPathComponent)")
                                     .font(.caption)
@@ -496,11 +521,11 @@ struct NewKeyWizard: View {
                 }
             }
 
-            if !generatedScreenshotName.isEmpty {
+            if !localGeneratedScreenshotName.isEmpty {
                 HStack {
                     Image(systemName: "info.circle")
                         .foregroundStyle(.blue)
-                    Text("Screenshot will be saved as: **\(generatedScreenshotName)**")
+                    Text("Screenshot will be saved as: **\(localGeneratedScreenshotName)**")
                         .font(.caption)
                 }
                 .padding(8)
@@ -522,9 +547,9 @@ struct NewKeyWizard: View {
                         .foregroundStyle(.red)
                 }
 
-                TextField("e.g., HOME_Welcome_Title", text: $keyName)
+                TextField("e.g., HOME_Welcome_Title", text: $localKeyName)
                     .textFieldStyle(.roundedBorder)
-                    .onChange(of: keyName) { _, newValue in
+                    .onChange(of: localKeyName) { _, newValue in
                         keyValidationError = store.validateKeyName(newValue, excludingId: UUID())
                     }
 
@@ -536,7 +561,7 @@ struct NewKeyWizard: View {
                             .foregroundStyle(.red)
                     }
                     .font(.caption)
-                } else if !keyName.isEmpty {
+                } else if !localKeyName.isEmpty {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(.green)
@@ -562,7 +587,7 @@ struct NewKeyWizard: View {
                         .foregroundStyle(.red)
                 }
 
-                TextEditor(text: $translation)
+                TextEditor(text: $localTranslation)
                     .frame(height: 80)
                     .font(.body)
                     .scrollContentBackground(.hidden)
@@ -580,7 +605,7 @@ struct NewKeyWizard: View {
                         .foregroundStyle(.red)
                 }
 
-                TextEditor(text: $notes)
+                TextEditor(text: $localNotes)
                     .frame(height: 60)
                     .font(.body)
                     .scrollContentBackground(.hidden)
@@ -603,7 +628,7 @@ struct NewKeyWizard: View {
                         Text("Target Languages")
                             .font(.subheadline.bold())
 
-                        TextField("e.g., de_DE, tr_TR, zh_TW", text: $targetLanguagesText)
+                        TextField("e.g., de_DE, tr_TR, zh_TW", text: $localTargetLanguagesText)
                             .textFieldStyle(.roundedBorder)
 
                         Text("Leave empty to target all languages")
@@ -617,13 +642,13 @@ struct NewKeyWizard: View {
                             .font(.subheadline.bold())
 
                         HStack {
-                            TextField("Max characters", value: $charLimit, format: .number)
+                            TextField("Max characters", value: $localCharLimit, format: .number)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 120)
 
-                            if charLimit != nil {
+                            if localCharLimit != nil {
                                 Button {
-                                    charLimit = nil
+                                    localCharLimit = nil
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .foregroundStyle(.secondary)
@@ -648,7 +673,7 @@ struct NewKeyWizard: View {
             // Screenshot preview
             GroupBox("Screenshot") {
                 HStack {
-                    if let url = screenshotURL, let image = NSImage(contentsOf: url) {
+                    if let url = localScreenshotURL, let image = NSImage(contentsOf: url) {
                         Image(nsImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
@@ -656,7 +681,7 @@ struct NewKeyWizard: View {
                             .clipShape(RoundedRectangle(cornerRadius: 4))
                     }
                     VStack(alignment: .leading) {
-                        Text(generatedScreenshotName)
+                        Text(localGeneratedScreenshotName)
                             .font(.headline)
                     }
                     Spacer()
@@ -667,28 +692,28 @@ struct NewKeyWizard: View {
             GroupBox("Key Details") {
                 VStack(alignment: .leading, spacing: 8) {
                     LabeledContent("Key Name") {
-                        Text(keyName)
+                        Text(localKeyName)
                             .font(.system(.body, design: .monospaced))
                     }
 
                     LabeledContent("Translation") {
-                        Text(translation)
+                        Text(localTranslation)
                             .lineLimit(2)
                     }
 
                     LabeledContent("Notes") {
-                        Text(notes)
+                        Text(localNotes)
                             .lineLimit(2)
                             .foregroundStyle(.secondary)
                     }
 
-                    if !targetLanguagesText.isEmpty {
+                    if !localTargetLanguagesText.isEmpty {
                         LabeledContent("Target Languages") {
-                            Text(targetLanguagesText)
+                            Text(localTargetLanguagesText)
                         }
                     }
 
-                    if let limit = charLimit {
+                    if let limit = localCharLimit {
                         LabeledContent("Character Limit") {
                             Text("\(limit)")
                         }
@@ -720,16 +745,16 @@ struct NewKeyWizard: View {
 
             Spacer()
 
-            if currentStep != .screenshot {
+            if localCurrentStep != .screenshot {
                 Button("Back") {
                     withAnimation {
-                        currentStep = WizardStep(rawValue: currentStep.rawValue - 1) ?? .screenshot
+                        localCurrentStep = WizardStep(rawValue: localCurrentStep.rawValue - 1) ?? .screenshot
                     }
                 }
                 .buttonStyle(.bordered)
             }
 
-            if currentStep == .review {
+            if localCurrentStep == .review {
                 Button {
                     createKey()
                 } label: {
@@ -745,7 +770,7 @@ struct NewKeyWizard: View {
             } else {
                 Button("Next") {
                     withAnimation {
-                        currentStep = WizardStep(rawValue: currentStep.rawValue + 1) ?? .review
+                        localCurrentStep = WizardStep(rawValue: localCurrentStep.rawValue + 1) ?? .review
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -758,14 +783,14 @@ struct NewKeyWizard: View {
     // MARK: - Validation
 
     private var canProceedToNextStep: Bool {
-        switch currentStep {
+        switch localCurrentStep {
         case .screenshot:
-            return screenshotURL != nil
+            return localScreenshotURL != nil
         case .keyDetails:
-            return !keyName.isEmpty &&
+            return !localKeyName.isEmpty &&
                    keyValidationError == nil &&
-                   !translation.isEmpty &&
-                   !notes.isEmpty
+                   !localTranslation.isEmpty &&
+                   !localNotes.isEmpty
         case .review:
             return true
         }
@@ -801,37 +826,37 @@ struct NewKeyWizard: View {
     }
 
     private func setScreenshot(_ url: URL) {
-        screenshotURL = url
-        generatedScreenshotName = store.generateScreenshotName()
+        localScreenshotURL = url
+        localGeneratedScreenshotName = store.generateScreenshotName()
     }
 
     private func createKey() {
-        guard let screenshotURL else { return }
+        guard let screenshotURL = localScreenshotURL else { return }
 
         // Parse target languages
-        let targetLanguages: [String]? = targetLanguagesText.isEmpty ? nil :
-            targetLanguagesText
+        let targetLanguages: [String]? = localTargetLanguagesText.isEmpty ? nil :
+            localTargetLanguagesText
                 .components(separatedBy: ",")
                 .map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
 
         // Create the key
         let newKey = TranslationKey(
-            key: keyName,
-            translation: translation,
-            notes: notes,
+            key: localKeyName,
+            translation: localTranslation,
+            notes: localNotes,
             targetLanguages: targetLanguages,
-            charLimit: charLimit,
+            charLimit: localCharLimit,
             isNew: false
         )
 
         // Create screenshot with proper name
-        let destinationURL = feature.imagesFolderURL.appendingPathComponent(generatedScreenshotName)
+        let destinationURL = feature.imagesFolderURL.appendingPathComponent(localGeneratedScreenshotName)
         let screenshot = PendingScreenshot(
             id: UUID(),
             originalURL: screenshotURL,
             originalName: screenshotURL.lastPathComponent,
-            renamedName: generatedScreenshotName,
+            renamedName: localGeneratedScreenshotName,
             destinationURL: destinationURL
         )
 

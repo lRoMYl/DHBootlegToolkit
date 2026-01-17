@@ -37,6 +37,11 @@ struct S3DetailView: View {
     @State private var showDeleteConfirmation: Bool = false
     @State private var deleteFieldPath: [String] = []
 
+    // Read-only state for protected branches
+    private var isReadOnly: Bool {
+        store.isOnProtectedBranch
+    }
+
     // Array element state
     @State private var showInsertArrayElementSheet: Bool = false
     @State private var insertArrayElementPath: [String] = []
@@ -78,7 +83,45 @@ struct S3DetailView: View {
     @ViewBuilder
     private func countryDetailView(_ country: S3CountryConfig) -> some View {
         VStack(spacing: 0) {
-            S3DetailHeader(country: country)
+            S3DetailHeader(country: country, isReadOnly: isReadOnly)
+
+            // Deleted placeholder notice
+            if country.isDeletedPlaceholder {
+                HStack(spacing: 8) {
+                    Image(systemName: "trash.fill")
+                        .foregroundColor(.red)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("This config was deleted")
+                            .font(.headline)
+                        Text("Loading content from git...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding()
+                .background(Color.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal)
+                .padding(.top, 8)
+            }
+
+            // Read-only banner for protected branches
+            if store.isOnProtectedBranch {
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.fill")
+                    Text("Read-only on \(store.currentBranchDisplayName) branch")
+                    Spacer()
+                    Button("Create Branch to Edit") {
+                        store.showCreateBranchPrompt = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+                .padding()
+                .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal)
+                .padding(.top, 8)
+            }
 
             Divider()
 
@@ -107,6 +150,9 @@ struct S3DetailView: View {
                             expandAllByDefault: true,
                             manuallyCollapsed: treeViewModel.getManuallyCollapsed(),
                             originalJSON: currentHeadJSON,
+                            fileGitStatus: country.gitStatus,
+                            hasInMemoryChanges: country.hasChanges,
+                            editedPaths: country.editedPaths,
                             showChangedFieldsOnly: showChangedFieldsOnly
                         )
                     }
@@ -234,41 +280,42 @@ struct S3DetailView: View {
                 )
             } else {
                 S3TreeContentView(
-                treeViewModel: treeViewModel,
-                searchMatches: searchMatches,
-                onToggleExpand: { nodeId in
-                    treeViewModel.toggleExpand(nodeId)
-                },
-                onValueChange: { path, newValue in
-                    store.updateValue(at: path, value: newValue)
-                },
-                onAddField: { parentPath in
-                    addFieldContext = AddFieldContext(parentPath: parentPath)
-                },
-                onDeleteField: { path in
-                    deleteFieldPath = path
-                    showDeleteConfirmation = true
-                },
-                onInsertArrayElement: { path in
-                    insertArrayElementPath = path
-                    // Infer type from sibling elements
-                    let arrayPath = Array(path.dropLast())
-                    if let array = getArrayValue(at: arrayPath, from: json) {
-                        insertArrayElementType = InsertArrayElementSheet.inferType(from: array)
-                    } else {
-                        insertArrayElementType = .string
-                    }
-                    showInsertArrayElementSheet = true
-                },
-                onDeleteArrayElement: { path in
-                    deleteArrayElementPath = path
-                    showDeleteArrayElementConfirmation = true
-                },
-                onMoveArrayElement: { arrayPath, fromIndex, toIndex in
-                    store.moveArrayElement(arrayPath: arrayPath, fromIndex: fromIndex, toIndex: toIndex)
-                },
-                pathsToExpand: pathsToExpand
-            )
+                    treeViewModel: treeViewModel,
+                    searchMatches: searchMatches,
+                    isReadOnly: isReadOnly,
+                    onToggleExpand: { nodeId in
+                        treeViewModel.toggleExpand(nodeId)
+                    },
+                    onValueChange: { path, newValue in
+                        store.updateValue(at: path, value: newValue)
+                    },
+                    onAddField: isReadOnly ? nil : { parentPath in
+                        addFieldContext = AddFieldContext(parentPath: parentPath)
+                    },
+                    onDeleteField: isReadOnly ? nil : { path in
+                        deleteFieldPath = path
+                        showDeleteConfirmation = true
+                    },
+                    onInsertArrayElement: isReadOnly ? nil : { path in
+                        insertArrayElementPath = path
+                        // Infer type from sibling elements
+                        let arrayPath = Array(path.dropLast())
+                        if let array = getArrayValue(at: arrayPath, from: json) {
+                            insertArrayElementType = InsertArrayElementSheet.inferType(from: array)
+                        } else {
+                            insertArrayElementType = .string
+                        }
+                        showInsertArrayElementSheet = true
+                    },
+                    onDeleteArrayElement: isReadOnly ? nil : { path in
+                        deleteArrayElementPath = path
+                        showDeleteArrayElementConfirmation = true
+                    },
+                    onMoveArrayElement: isReadOnly ? nil : { arrayPath, fromIndex, toIndex in
+                        store.moveArrayElement(arrayPath: arrayPath, fromIndex: fromIndex, toIndex: toIndex)
+                    },
+                    pathsToExpand: pathsToExpand
+                )
             // NOTE: Configuration is handled by parent-level task(id:) and onChange(of: configData)
             // No onAppear or onChange needed here - avoids race conditions from multiple config calls
             }
@@ -297,6 +344,9 @@ struct S3DetailView: View {
                 json: json,
                 expandAllByDefault: true,
                 originalJSON: nil,
+                fileGitStatus: country.gitStatus,
+                hasInMemoryChanges: country.hasChanges,
+                editedPaths: country.editedPaths,
                 showChangedFieldsOnly: showChangedFieldsOnly
             )
 
@@ -312,6 +362,9 @@ struct S3DetailView: View {
                     expandAllByDefault: true,
                     manuallyCollapsed: treeViewModel.getManuallyCollapsed(),
                     originalJSON: headJSON,
+                    fileGitStatus: country.gitStatus,
+                    hasInMemoryChanges: country.hasChanges,
+                    editedPaths: country.editedPaths,
                     showChangedFieldsOnly: showChangedFieldsOnly
                 )
             }
@@ -374,10 +427,11 @@ struct S3TreeContentView: View {
     @Environment(S3Store.self) private var store
     let treeViewModel: JSONTreeViewModel
     var searchMatches: JSONSearchMatches
+    var isReadOnly: Bool = false
     let onToggleExpand: (String) -> Void
     let onValueChange: ([String], Any) -> Void
-    let onAddField: ([String]) -> Void
-    let onDeleteField: ([String]) -> Void
+    var onAddField: (([String]) -> Void)? = nil
+    var onDeleteField: (([String]) -> Void)? = nil
     var onInsertArrayElement: (([String]) -> Void)? = nil
     var onDeleteArrayElement: (([String]) -> Void)? = nil
     var onMoveArrayElement: ((_ arrayPath: [String], _ fromIndex: Int, _ toIndex: Int) -> Void)? = nil
@@ -400,7 +454,8 @@ struct S3TreeContentView: View {
                             onSelect: { path, value in
                                 store.selectNode(path: path, value: value)
                             },
-                            isSelected: node.id == store.selectedNodePath
+                            isSelected: node.id == store.selectedNodePath,
+                            isReadOnly: isReadOnly
                         )
                     }
                 }
@@ -510,6 +565,7 @@ struct S3SearchBar: View {
 struct S3DetailHeader: View {
     @Environment(S3Store.self) private var store
     let country: S3CountryConfig
+    var isReadOnly: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -577,7 +633,7 @@ struct S3DetailHeader: View {
 
     private var actionButtons: some View {
         HStack {
-            // Inspect Field button - view field values across countries
+            // Inspect Field button - view field values across countries (always visible, read-only safe)
             Button {
                 store.startInspectFieldWizard()
             } label: {
@@ -586,18 +642,19 @@ struct S3DetailHeader: View {
             .disabled(store.selectedNodePath == nil || isArrayElementSelected)
             .buttonStyle(.bordered)
 
-            // Batch Update button - disabled when no field selected or when array element is selected
-            // (array elements have complex edge cases, so only allow applying entire arrays)
-            Button {
-                store.startApplyFieldWizard()
-            } label: {
-                Label("Batch Update", systemImage: "square.on.square")
+            // Batch Update button - hidden when read-only
+            if !isReadOnly {
+                Button {
+                    store.startApplyFieldWizard()
+                } label: {
+                    Label("Batch Update", systemImage: "square.on.square")
+                }
+                .disabled(store.selectedNodePath == nil || isArrayElementSelected)
+                .buttonStyle(.bordered)
             }
-            .disabled(store.selectedNodePath == nil || isArrayElementSelected)
-            .buttonStyle(.bordered)
 
-            // Discard and Save buttons - only visible when country has changes
-            if country.hasChanges {
+            // Discard and Save buttons - only visible when country has changes and not read-only
+            if country.hasChanges && !isReadOnly {
                 Button("Discard") {
                     Task {
                         await store.discardChanges(for: country.id)
@@ -607,7 +664,12 @@ struct S3DetailHeader: View {
 
                 Button("Save") {
                     Task {
-                        try? await store.saveCountry(country)
+                        do {
+                            try await store.saveCountry(country)
+                        } catch {
+                            store.saveErrorMessage = error.localizedDescription
+                            store.showSaveError = true
+                        }
                     }
                 }
                 .buttonStyle(.borderedProminent)

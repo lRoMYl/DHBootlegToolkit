@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import DHBootlegToolkitCore
 
 // MARK: - JSON Tree View Model
 
@@ -52,8 +53,14 @@ final class JSONTreeViewModel {
     /// Original JSON from git HEAD (for change tracking)
     private var originalJSON: [String: Any]?
 
+    /// Git status of the file itself (A/M/D/unchanged)
+    private var fileGitStatus: GitFileStatus? = nil
+
+    /// Set of paths that were explicitly edited by the user
+    private var editedPaths: Set<String> = []
+
     /// Change status for each path compared to git HEAD (only includes changed paths)
-    private var pathChangeStatus: [String: JSONChangeStatus] = [:]
+    internal private(set) var pathChangeStatus: [String: JSONChangeStatus] = [:]
 
     /// Whether to show only changed fields
     private var showChangedFieldsOnly: Bool = false
@@ -73,12 +80,18 @@ final class JSONTreeViewModel {
     ///   - expandAllByDefault: Whether to expand all nodes by default
     ///   - manuallyCollapsed: Set of paths that were manually collapsed by the user
     ///   - originalJSON: The original JSON from git HEAD for change tracking (nil = no diff)
+    ///   - fileGitStatus: The git status of the file itself (for applying file-level status to all fields)
+    ///   - hasInMemoryChanges: Whether the file has been edited in memory (affects how deleted/added files are handled)
+    ///   - editedPaths: Set of paths that were explicitly edited by the user (for hybrid badge computation)
     ///   - showChangedFieldsOnly: Whether to filter the tree to show only changed fields
     func configure(
         json: [String: Any],
         expandAllByDefault: Bool = true,
         manuallyCollapsed: Set<String> = [],
         originalJSON: [String: Any]? = nil,
+        fileGitStatus: GitFileStatus? = nil,
+        hasInMemoryChanges: Bool = false,
+        editedPaths: Set<String> = [],
         showChangedFieldsOnly: Bool = false
     ) {
         let startTime = CFAbsoluteTimeGetCurrent()
@@ -87,10 +100,21 @@ final class JSONTreeViewModel {
         self.expandAllByDefault = expandAllByDefault
         self.manuallyCollapsed = manuallyCollapsed
         self.originalJSON = originalJSON
+        self.fileGitStatus = fileGitStatus
+        self.editedPaths = editedPaths
         self.showChangedFieldsOnly = showChangedFieldsOnly
 
-        // Compute change status against original JSON
-        if let original = originalJSON {
+        // Compute change status with hybrid approach
+        if let fileStatus = fileGitStatus, (fileStatus == .deleted || fileStatus == .added) {
+            // Hybrid mode: combine file-wide status with per-field diff for edited paths
+            pathChangeStatus = computeHybridChangeStatus(
+                json: json,
+                fileStatus: fileStatus,
+                originalJSON: originalJSON,
+                editedPaths: editedPaths
+            )
+        } else if let original = originalJSON {
+            // Standard per-field diff for modified/unchanged files
             pathChangeStatus = JSONDiffUtility.computeChanges(current: json, original: original)
         } else {
             pathChangeStatus = [:]
@@ -108,6 +132,10 @@ final class JSONTreeViewModel {
         if expandAllByDefault {
             let pathStart = CFAbsoluteTimeGetCurrent()
             expandedPaths = collectAllExpandablePaths(from: json, parentPath: [])
+            // Also collect paths from originalJSON to include deleted fields
+            if let original = originalJSON {
+                expandedPaths.formUnion(collectAllExpandablePaths(from: original, parentPath: []))
+            }
             // Remove manually collapsed
             expandedPaths.subtract(manuallyCollapsed)
             pathDuration = CFAbsoluteTimeGetCurrent() - pathStart
@@ -142,9 +170,148 @@ final class JSONTreeViewModel {
         currentMatchPath = nil
         flattenedNodes = []
         originalJSON = nil
+        fileGitStatus = nil
+        editedPaths = []
         pathChangeStatus = [:]
         showChangedFieldsOnly = false
         cachedVisiblePaths = nil
+    }
+
+    /// Computes change status for all paths when the entire file has a git status
+    /// Used when file is deleted or added - all fields get the same status
+    private func computeFileWideChangeStatus(json: [String: Any], status: GitFileStatus) -> [String: JSONChangeStatus] {
+        var result: [String: JSONChangeStatus] = [:]
+        let changeStatus: JSONChangeStatus = status == .deleted ? .deleted : .added
+
+        func traverse(_ value: Any, path: [String]) {
+            let pathString = path.joined(separator: ".")
+            result[pathString] = changeStatus
+
+            if let dict = value as? [String: Any] {
+                for (key, childValue) in dict {
+                    traverse(childValue, path: path + [key])
+                }
+            } else if let array = value as? [Any] {
+                for (index, childValue) in array.enumerated() {
+                    traverse(childValue, path: path + [String(index)])
+                }
+            }
+        }
+
+        // Traverse all top-level keys
+        for (key, value) in json {
+            traverse(value, path: [key])
+        }
+
+        return result
+    }
+
+    /// Computes hybrid change status for deleted/added files with some edited fields
+    /// - Edited paths: Compare with git HEAD (per-field diff)
+    /// - Unedited paths: Show file status ([D] or [A])
+    private func computeHybridChangeStatus(
+        json: [String: Any],
+        fileStatus: GitFileStatus,
+        originalJSON: [String: Any]?,
+        editedPaths: Set<String>
+    ) -> [String: JSONChangeStatus] {
+        var result: [String: JSONChangeStatus] = [:]
+
+        // Default status for unedited fields
+        let fileChangeStatus: JSONChangeStatus = fileStatus == .deleted ? .deleted : .added
+
+        // Compute per-field diff if we have original JSON
+        let diffStatuses = originalJSON != nil ?
+            JSONDiffUtility.computeChanges(current: json, original: originalJSON!) : [:]
+
+        // Helper to traverse deleted nodes (only in original, not in current)
+        func traverseDeleted(_ value: Any, path: [String]) {
+            let pathString = path.joined(separator: ".")
+            result[pathString] = .deleted
+
+            // Recurse into children of deleted nodes
+            if let dict = value as? [String: Any] {
+                for (key, childValue) in dict {
+                    traverseDeleted(childValue, path: path + [key])
+                }
+            } else if let array = value as? [Any] {
+                for (index, childValue) in array.enumerated() {
+                    traverseDeleted(childValue, path: path + [String(index)])
+                }
+            }
+        }
+
+        func traverse(_ value: Any, path: [String], existsInOriginal: Bool) {
+            let pathString = path.joined(separator: ".")
+
+            // Check if this path or any parent path was edited
+            let wasEdited = editedPaths.contains { editedPath in
+                pathString == editedPath || pathString.hasPrefix(editedPath + ".")
+            }
+
+            if wasEdited {
+                // Use per-field diff status for edited paths
+                result[pathString] = diffStatuses[pathString] ?? .unchanged
+            } else {
+                // Use file status for unedited paths
+                result[pathString] = fileChangeStatus
+            }
+
+            // Recurse into children (OPTIMIZED: only traverse deleted subtrees, not all of original)
+            if let dict = value as? [String: Any] {
+                let originalDict = getOriginalValue(at: path) as? [String: Any]
+
+                // Traverse current keys
+                for (key, childValue) in dict {
+                    let childExistsInOriginal = originalDict?[key] != nil
+                    traverse(childValue, path: path + [key], existsInOriginal: childExistsInOriginal)
+                }
+
+                // Traverse ONLY missing keys from original (lazy approach)
+                if let orig = originalDict {
+                    for (key, origValue) in orig where dict[key] == nil {
+                        traverseDeleted(origValue, path: path + [key])
+                    }
+                }
+            } else if let array = value as? [Any] {
+                let originalArray = getOriginalValue(at: path) as? [Any]
+
+                // Traverse current array elements
+                for (index, childValue) in array.enumerated() {
+                    let childPath = path + [String(index)]
+                    let childExistsInOriginal = originalArray?.indices.contains(index) ?? false
+                    traverse(childValue, path: childPath, existsInOriginal: childExistsInOriginal)
+                }
+
+                // Traverse ONLY missing elements from original (lazy approach)
+                if let orig = originalArray, orig.count > array.count {
+                    for index in array.count..<orig.count {
+                        traverseDeleted(orig[index], path: path + [String(index)])
+                    }
+                }
+            }
+        }
+
+        // Traverse union of keys from both current and original JSON
+        var allKeys = Set(json.keys)
+        if let original = originalJSON {
+            allKeys.formUnion(original.keys)
+        }
+
+        for key in allKeys {
+            let currentValue = json[key]
+            let originalValue = originalJSON?[key]
+
+            if let value = currentValue {
+                // Field exists in current JSON
+                traverse(value, path: [key], existsInOriginal: originalValue != nil)
+            } else if let value = originalValue {
+                // Field exists only in original (deleted)
+                traverseDeleted(value, path: [key])
+            }
+        }
+
+        return result
     }
 
     // MARK: - Expansion Control
@@ -188,6 +355,10 @@ final class JSONTreeViewModel {
     func expandAll() {
         manuallyCollapsed.removeAll()
         expandedPaths = collectAllExpandablePaths(from: json, parentPath: [])
+        // Also collect paths from originalJSON to include deleted fields
+        if let original = originalJSON {
+            expandedPaths.formUnion(collectAllExpandablePaths(from: original, parentPath: []))
+        }
         isAllExpanded = true
         rebuildFlattenedNodes()
     }
@@ -223,10 +394,10 @@ final class JSONTreeViewModel {
         rebuildFlattenedNodes()
     }
 
-    /// Returns the count of fields with changes (added or modified)
+    /// Returns the count of fields with changes (added, modified, or deleted)
     func countChangedFields() -> Int {
         return pathChangeStatus.values.filter { status in
-            status == .added || status == .modified
+            status == .added || status == .modified || status == .deleted
         }.count
     }
 
@@ -252,9 +423,17 @@ final class JSONTreeViewModel {
     ) -> [FlattenedNode] {
         var result: [FlattenedNode] = []
 
-        for key in dict.keys.sorted() {
-            guard let value = dict[key] else { continue }
+        // Collect all keys: current keys + deleted keys from original
+        var allKeys = Set(dict.keys)
 
+        // Find deleted keys from original
+        if let originalDict = getOriginalValue(at: parentPath) as? [String: Any] {
+            for key in originalDict.keys where dict[key] == nil {
+                allKeys.insert(key)
+            }
+        }
+
+        for key in allKeys.sorted() {
             let path = parentPath + [key]
             let pathString = path.joined(separator: ".")
 
@@ -263,8 +442,29 @@ final class JSONTreeViewModel {
                 continue
             }
 
-            let nodeType = JSONNodeType.infer(from: value)
-            let isExpanded = self.isExpanded(pathString)
+            let isDeleted = dict[key] == nil
+            let value: Any
+            let nodeType: JSONNodeType
+            let changeStatus: JSONChangeStatus?
+
+            if isDeleted {
+                // Deleted node - get value from original
+                guard let originalDict = getOriginalValue(at: parentPath) as? [String: Any],
+                      let originalValue = originalDict[key] else {
+                    continue
+                }
+                value = originalValue
+                nodeType = JSONNodeType.infer(from: originalValue)
+                changeStatus = .deleted
+            } else {
+                // Normal node - get value from current
+                guard let currentValue = dict[key] else { continue }
+                value = currentValue
+                nodeType = JSONNodeType.infer(from: currentValue)
+                changeStatus = pathChangeStatus[pathString]
+            }
+
+            let isExpanded = self.isExpanded(pathString) // Allow deleted nodes to expand to show children
             let isCurrentMatch = (currentMatchPath == path)
 
             let node = FlattenedNode(
@@ -277,12 +477,12 @@ final class JSONTreeViewModel {
                 parentType: parentType,
                 isExpanded: isExpanded,
                 isCurrentMatch: isCurrentMatch,
-                changeStatus: pathChangeStatus[pathString]
+                changeStatus: changeStatus
             )
 
             result.append(node)
 
-            // Recursively add children if expanded
+            // Recursively add children if expanded (including deleted nodes to show git HEAD structure)
             if isExpanded {
                 if let childDict = value as? [String: Any] {
                     result += flattenJSON(childDict, parentPath: path, depth: depth + 1, parentType: .object)
@@ -304,7 +504,11 @@ final class JSONTreeViewModel {
     ) -> [FlattenedNode] {
         var result: [FlattenedNode] = []
 
-        for (index, value) in array.enumerated() {
+        // Get original array if available (for detecting deleted elements)
+        let originalArray = getOriginalValue(at: parentPath) as? [Any]
+        let totalCount = max(array.count, originalArray?.count ?? 0)
+
+        for index in 0..<totalCount {
             let key = "[\(index)]"
             let path = parentPath + [String(index)]
             let pathString = path.joined(separator: ".")
@@ -314,8 +518,27 @@ final class JSONTreeViewModel {
                 continue
             }
 
-            let nodeType = JSONNodeType.infer(from: value)
-            let isExpanded = self.isExpanded(pathString)
+            let isDeleted = index >= array.count
+            let value: Any
+            let nodeType: JSONNodeType
+            let changeStatus: JSONChangeStatus?
+
+            if isDeleted {
+                // Deleted element - get value from original
+                guard let originalArray = originalArray, index < originalArray.count else {
+                    continue
+                }
+                value = originalArray[index]
+                nodeType = JSONNodeType.infer(from: value)
+                changeStatus = .deleted
+            } else {
+                // Normal element
+                value = array[index]
+                nodeType = JSONNodeType.infer(from: value)
+                changeStatus = pathChangeStatus[pathString]
+            }
+
+            let isExpanded = self.isExpanded(pathString) // Allow deleted array elements to expand
             let isCurrentMatch = (currentMatchPath == path)
 
             let node = FlattenedNode(
@@ -328,12 +551,12 @@ final class JSONTreeViewModel {
                 parentType: parentType,
                 isExpanded: isExpanded,
                 isCurrentMatch: isCurrentMatch,
-                changeStatus: pathChangeStatus[pathString]
+                changeStatus: changeStatus
             )
 
             result.append(node)
 
-            // Recursively add children if expanded
+            // Recursively add children if expanded (including deleted nodes to show git HEAD structure)
             if isExpanded {
                 if let childDict = value as? [String: Any] {
                     result += flattenJSON(childDict, parentPath: path, depth: depth + 1, parentType: .object)
@@ -404,14 +627,31 @@ final class JSONTreeViewModel {
         return result
     }
 
+    /// Navigate the original JSON to get the value at a specific path
+    private func getOriginalValue(at path: [String]) -> Any? {
+        guard let original = originalJSON else { return nil }
+        var current: Any = original
+        for component in path {
+            if let dict = current as? [String: Any] {
+                guard let next = dict[component] else { return nil }
+                current = next
+            } else if let array = current as? [Any], let index = Int(component), index < array.count {
+                current = array[index]
+            } else {
+                return nil
+            }
+        }
+        return current
+    }
+
     /// Computes which paths should be visible when filtering by changes
     /// Returns set of paths that have changes OR are ancestors of changed nodes
     private func computeVisiblePathsForChangeFilter() -> Set<String> {
         var visiblePaths = Set<String>()
 
-        // For each changed path (added or modified), include it and all ancestors
+        // For each changed path (added, modified, or deleted), include it and all ancestors
         for (pathString, status) in pathChangeStatus {
-            guard status == .added || status == .modified else { continue }
+            guard status == .added || status == .modified || status == .deleted else { continue }
 
             // Add the changed path itself
             visiblePaths.insert(pathString)

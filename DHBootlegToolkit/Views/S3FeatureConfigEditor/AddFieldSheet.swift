@@ -125,6 +125,10 @@ struct AddFieldSheet: View {
             .padding()
         }
         .frame(width: 450, height: 420)
+        .onAppear {
+            // Safety dismissal: don't allow adding fields on protected branches
+            if store.isOnProtectedBranch { dismiss() }
+        }
     }
 
     // MARK: - Value Editor

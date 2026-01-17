@@ -52,6 +52,20 @@ enum JSONDiffUtility {
                     changes: &changes
                 )
             }
+
+            // Check for deleted keys (exist in original but not in current)
+            if let originalDict = originalDict {
+                for key in originalDict.keys where currentDict[key] == nil {
+                    let childPath = path + [key]
+                    let deletedPathString = childPath.joined(separator: ".")
+                    changes[deletedPathString] = .deleted
+
+                    // Recursively mark all nested fields as deleted
+                    if let nestedOriginal = originalDict[key] {
+                        markAllDeleted(nestedOriginal, path: childPath, changes: &changes)
+                    }
+                }
+            }
             return
         }
 
@@ -75,6 +89,18 @@ enum JSONDiffUtility {
                     changes: &changes
                 )
             }
+
+            // Check for deleted array elements (indices that existed in original but not in current)
+            if let originalArray = originalArray, originalArray.count > currentArray.count {
+                for index in currentArray.count..<originalArray.count {
+                    let childPath = path + [String(index)]
+                    let deletedPathString = childPath.joined(separator: ".")
+                    changes[deletedPathString] = .deleted
+
+                    // Recursively mark all nested fields as deleted
+                    markAllDeleted(originalArray[index], path: childPath, changes: &changes)
+                }
+            }
             return
         }
 
@@ -89,6 +115,30 @@ enum JSONDiffUtility {
             changes[pathString] = .modified
         }
         // If equal, don't add to dictionary (unchanged)
+    }
+
+    /// Recursively marks all nested fields as deleted
+    private static func markAllDeleted(
+        _ value: Any,
+        path: [String],
+        changes: inout [String: JSONChangeStatus]
+    ) {
+        if let dict = value as? [String: Any] {
+            for (key, childValue) in dict {
+                let childPath = path + [key]
+                let childPathString = childPath.joined(separator: ".")
+                changes[childPathString] = .deleted
+                markAllDeleted(childValue, path: childPath, changes: &changes)
+            }
+        } else if let array = value as? [Any] {
+            for (index, childValue) in array.enumerated() {
+                let childPath = path + [String(index)]
+                let childPathString = childPath.joined(separator: ".")
+                changes[childPathString] = .deleted
+                markAllDeleted(childValue, path: childPath, changes: &changes)
+            }
+        }
+        // Leaf values don't need additional processing - the parent call already marked them
     }
 
     /// Compares two JSON values for equality

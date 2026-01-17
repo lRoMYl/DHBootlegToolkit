@@ -29,7 +29,9 @@ struct S3FeatureConfigBrowserView: View {
                     get: { store.selectedCountry?.id },
                     set: { id in
                         if let id, let country = store.countries.first(where: { $0.id == id }) {
-                            store.selectCountry(country)
+                            Task {
+                                await store.selectCountry(country)
+                            }
                         }
                     }
                 )) {
@@ -90,11 +92,16 @@ struct S3FeatureConfigBrowserView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 if store.hasRepository {
-                    // Save All button
-                    if store.hasUnsavedChanges {
+                    // Save All button - hidden on protected branches
+                    if store.hasUnsavedChanges && !store.isOnProtectedBranch {
                         Button {
                             Task {
-                                try? await store.saveAllChanges()
+                                do {
+                                    try await store.saveAllChanges()
+                                } catch {
+                                    store.saveErrorMessage = error.localizedDescription
+                                    store.showSaveError = true
+                                }
                             }
                         } label: {
                             Label("Save All", systemImage: "square.and.arrow.down")
@@ -144,6 +151,7 @@ struct S3RepositoryPrompt: View {
 
     private func selectRepository() {
         let panel = NSOpenPanel()
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
@@ -189,6 +197,7 @@ struct S3RepositoryError: View {
 
     private func selectRepository() {
         let panel = NSOpenPanel()
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false

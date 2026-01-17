@@ -18,6 +18,7 @@ struct DHBootlegToolkitApp: App {
     @State private var appStore = AppStore()
     @State private var s3Store = S3Store()
     @State private var stockTickerStore = StockTickerStore()
+    @State private var showResetConfirmation = false
 
     var body: some Scene {
         WindowGroup("DH Bootleg Toolkit") {
@@ -64,6 +65,14 @@ struct DHBootlegToolkitApp: App {
                         UserDefaults.standard.set(url, forKey: "lastS3RepositoryURL")
                     }
                 }
+                .alert("Reset All Settings", isPresented: $showResetConfirmation) {
+                    Button("Cancel", role: .cancel) {}
+                    Button("Reset", role: .destructive) {
+                        resetAllSettings()
+                    }
+                } message: {
+                    Text("This will clear all cached data and settings. The app will restart.")
+                }
         }
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -103,6 +112,27 @@ struct DHBootlegToolkitApp: App {
                 .keyboardShortcut("s", modifiers: [.command])
                 .disabled(!appStore.hasChanges)
             }
+
+            CommandGroup(after: .appSettings) {
+                Divider()
+
+                Menu("Reset...") {
+                    Button("Clear Stock Cache") {
+                        clearStockCache()
+                        stockTickerStore.clearCache()
+                    }
+
+                    Button("Clear Repository Settings") {
+                        clearRepositorySettings()
+                    }
+
+                    Divider()
+
+                    Button("Reset All Settings...") {
+                        showResetConfirmation = true
+                    }
+                }
+            }
         }
 
         Settings {
@@ -111,5 +141,41 @@ struct DHBootlegToolkitApp: App {
                 .environment(s3Store)
                 .environment(stockTickerStore)
         }
+    }
+
+    // MARK: - Reset Functions
+
+    private func clearStockCache() {
+        let defaults = UserDefaults.standard
+        // Clear stock data cache
+        for symbol in ["DHER.DE", "TALABAT.AE"] {
+            defaults.removeObject(forKey: "stock_\(symbol)")
+            defaults.removeObject(forKey: "sentiment_\(symbol)")
+        }
+        defaults.removeObject(forKey: "selectedChartRange")
+    }
+
+    private func clearRepositorySettings() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: "lastRepositoryURL")
+        defaults.removeObject(forKey: "lastS3RepositoryURL")
+    }
+
+    private func resetAllSettings() {
+        let defaults = UserDefaults.standard
+        // Clear all known keys
+        clearStockCache()
+        clearRepositorySettings()
+        defaults.removeObject(forKey: "selectedSidebarTab")
+
+        // Restart the app
+        let url = URL(fileURLWithPath: Bundle.main.resourcePath!)
+        let path = url.deletingLastPathComponent().deletingLastPathComponent().absoluteString
+        let task = Process()
+        task.launchPath = "/usr/bin/open"
+        task.arguments = [path]
+        task.launch()
+
+        NSApplication.shared.terminate(nil)
     }
 }

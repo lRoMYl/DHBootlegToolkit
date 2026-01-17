@@ -39,10 +39,11 @@ struct JSONNodeRowView: View {
                 .buttonStyle(.plain)
             }
 
-            // Key label (monospaced, blue)
+            // Key label (monospaced, blue or dimmed if deleted)
             Text(node.key)
                 .font(.system(.body, design: .monospaced))
-                .foregroundStyle(.blue)
+                .strikethrough(node.isDeleted)
+                .foregroundColor(node.isDeleted ? Color.secondary : Color.blue)
                 .lineLimit(1)
 
             // Value editor or summary
@@ -53,13 +54,15 @@ struct JSONNodeRowView: View {
             // Type badge
             NodeTypeBadge(nodeType: node.nodeType)
 
-            // Change status badge (only for leaf nodes with changes)
-            if node.isLeafNode, let status = node.changeStatus {
+            // Change status badge (for leaf nodes with changes, or any deleted node)
+            if let status = node.changeStatus, node.isLeafNode || status == .deleted {
                 switch status {
                 case .added:
                     StatusLetterBadge.added()
                 case .modified:
                     StatusLetterBadge.modified()
+                case .deleted:
+                    StatusLetterBadge.deleted()
                 case .unchanged:
                     EmptyView()
                 }
@@ -70,14 +73,15 @@ struct JSONNodeRowView: View {
         .padding(.leading, node.indentation)
         .background(rowBackground)
         .cornerRadius(4)
+        .opacity(node.isDeleted ? 0.7 : 1.0)
         .contentShape(Rectangle())
         .onTapGesture {
             // Single tap selects the node
             onSelect?(node.path, node.value)
         }
         .contextMenu {
-            // Hide context menu entirely in read-only mode
-            if !isReadOnly {
+            // Hide context menu entirely in read-only mode or for deleted nodes
+            if !isReadOnly && !node.isDeleted {
                 // Add Child Field - only for object nodes (not arrays)
                 if node.canAddChildField, let onAdd = onAddField {
                     Button("Add Child Field", systemImage: "plus") {
@@ -168,6 +172,9 @@ struct JSONNodeRowView: View {
 
     @ViewBuilder
     private var valueView: some View {
+        // Read-only when global read-only is set (protected branches)
+        let showReadOnly = isReadOnly
+
         switch node.nodeType {
         case .object, .array:
             if let summary = node.nodeType.summary {
@@ -178,10 +185,11 @@ struct JSONNodeRowView: View {
 
         case .string:
             if let stringValue = node.stringValue {
-                if isReadOnly {
+                if showReadOnly {
                     Text("\"\(stringValue)\"")
                         .font(.system(.body, design: .monospaced))
-                        .foregroundStyle(.green)
+                        .strikethrough(node.isDeleted)
+                        .foregroundColor(node.isDeleted ? Color.secondary : Color.green)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 } else {
@@ -196,7 +204,7 @@ struct JSONNodeRowView: View {
 
         case .bool:
             if let boolValue = node.boolValue {
-                if isReadOnly {
+                if showReadOnly {
                     Toggle("", isOn: .constant(boolValue))
                         .toggleStyle(.switch)
                         .labelsHidden()
@@ -214,10 +222,11 @@ struct JSONNodeRowView: View {
 
         case .int:
             if let numberValue = node.numberValue {
-                if isReadOnly {
+                if showReadOnly {
                     Text(numberValue.stringValue)
                         .font(.system(.body, design: .monospaced))
-                        .foregroundStyle(.purple)
+                        .strikethrough(node.isDeleted)
+                        .foregroundColor(node.isDeleted ? Color.secondary : Color.purple)
                 } else {
                     JSONNumberRowEditor(
                         value: numberValue,
@@ -231,11 +240,13 @@ struct JSONNodeRowView: View {
         case .null:
             Text("null")
                 .font(.system(.body, design: .monospaced))
-                .foregroundStyle(.orange)
+                .strikethrough(node.isDeleted)
+                .foregroundColor(node.isDeleted ? Color.secondary : Color.orange)
 
         case .unknown:
             Text(String(describing: node.value))
                 .font(.system(.body, design: .monospaced))
+                .strikethrough(node.isDeleted)
                 .foregroundStyle(.secondary)
         }
     }
@@ -279,9 +290,7 @@ struct JSONStringRowEditor: View {
                 .font(.system(.body, design: .monospaced))
                 .focused($isFocused)
                 .onSubmit {
-                    if editedValue != value {
-                        onCommit(editedValue)
-                    }
+                    onCommit(editedValue)  // Always commit, let store handle duplicates
                     isEditing = false
                 }
                 .onExitCommand {
@@ -294,6 +303,7 @@ struct JSONStringRowEditor: View {
                 .foregroundStyle(.green)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .contentShape(Rectangle())
                 .onTapGesture(count: 2) {
                     editedValue = value
                     isEditing = true
@@ -342,6 +352,9 @@ struct JSONNumberRowEditor: View {
                 .onSubmit {
                     if let newNumber = parseNumber(editedValue) {
                         onCommit(newNumber)
+                    } else {
+                        // If parsing fails, revert to original value
+                        editedValue = value.stringValue
                     }
                     isEditing = false
                 }
@@ -353,6 +366,7 @@ struct JSONNumberRowEditor: View {
             Text(value.stringValue)
                 .font(.system(.body, design: .monospaced))
                 .foregroundStyle(.purple)
+                .contentShape(Rectangle())
                 .onTapGesture(count: 2) {
                     editedValue = value.stringValue
                     isEditing = true

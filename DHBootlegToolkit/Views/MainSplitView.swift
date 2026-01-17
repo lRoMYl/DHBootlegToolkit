@@ -39,6 +39,14 @@ struct MainSplitView: View {
             .toolbar(id: "git-toolbar") {
                 toolbarContent()
             }
+            .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    SettingsLink {
+                        Image(systemName: "gearshape")
+                    }
+                    .help("Settings")
+                }
+            }
             .onChange(of: selectedSidebarTab) { _, newTab in
                 UserDefaults.standard.set(newTab.rawValue, forKey: Self.selectedModuleKey)
             }
@@ -51,6 +59,12 @@ struct MainSplitView: View {
             }
             .sheet(isPresented: $store.showCreateBranchPrompt) {
                 CreateBranchSheet()
+            }
+            .sheet(isPresented: Binding(
+                get: { s3Store.showCreateBranchPrompt },
+                set: { s3Store.showCreateBranchPrompt = $0 }
+            )) {
+                S3CreateBranchSheet()
             }
             .sheet(isPresented: $store.showRepositoryPickerDialog) {
                 RepositoryPickerSheet()
@@ -78,10 +92,20 @@ struct AlertModifiers: ViewModifier {
 
     func body(content: Content) -> some View {
         @Bindable var store = store
+        @Bindable var s3Store = s3Store
 
         content
             .gitPublishErrorAlert(store: store)
             .gitPublishErrorAlert(store: s3Store)
+            .alert("Save Failed", isPresented: $s3Store.showSaveError) {
+                Button("OK", role: .cancel) {
+                    s3Store.saveErrorMessage = nil
+                }
+            } message: {
+                if let message = s3Store.saveErrorMessage {
+                    Text(message)
+                }
+            }
             .alert("Invalid Repository", isPresented: $store.showRepositoryError) {
                 Button("Choose Another") {
                     store.showRepositoryPickerDialog = true
@@ -874,6 +898,7 @@ struct RepositoryPickerSheet: View {
 
             Button("Choose Folder...") {
                 let panel = NSOpenPanel()
+                panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
                 panel.allowsMultipleSelection = false
                 panel.canChooseDirectories = true
                 panel.canChooseFiles = false
@@ -985,6 +1010,11 @@ struct CreateBranchSheet: View {
         .padding(40)
         .frame(width: 400)
         .interactiveDismissDisabled(isCreating)
+        .onDisappear {
+            // Clear pending state if sheet is dismissed without successful branch creation
+            // (successful cases clear this before dismiss and open the tab)
+            store.pendingAddNewKeyFeature = nil
+        }
         .confirmationDialog(
             "Branch Already Exists",
             isPresented: $showSwitchConfirmation,
@@ -996,7 +1026,12 @@ struct CreateBranchSheet: View {
                     if let error = await store.switchToBranch(branch) {
                         errorMessage = error
                     } else {
+                        let pendingFeature = store.pendingAddNewKeyFeature
+                        store.pendingAddNewKeyFeature = nil
                         dismiss()
+                        if let feature = pendingFeature {
+                            store.openNewKeyTab(for: feature)
+                        }
                     }
                     isCreating = false
                 }
@@ -1018,7 +1053,12 @@ struct CreateBranchSheet: View {
 
             switch result {
             case .success:
+                let pendingFeature = store.pendingAddNewKeyFeature
+                store.pendingAddNewKeyFeature = nil
                 dismiss()
+                if let feature = pendingFeature {
+                    store.openNewKeyTab(for: feature)
+                }
             case .error(let message):
                 errorMessage = message
             case .branchExists(let name):

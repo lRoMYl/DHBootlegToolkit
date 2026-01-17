@@ -51,6 +51,9 @@ struct S3ApplyFieldSheet: View {
         }
         .frame(width: 700, height: 650)
         .onAppear {
+            // Safety dismissal: don't allow batch updates on protected branches
+            if store.isOnProtectedBranch { dismiss(); return }
+
             targetEnvironment = store.selectedEnvironment
             Task {
                 await loadCountriesForEnvironment(targetEnvironment)
