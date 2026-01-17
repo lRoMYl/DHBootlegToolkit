@@ -3,9 +3,6 @@ name: Release
 on:
   release:
     types: [published]
-  push:
-    tags:
-      - '*'
 
 jobs:
   build:
@@ -23,11 +20,7 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            VERSION="${{ github.event.release.tag_name }}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/}"
-          fi
+          VERSION="${{ github.event.release.tag_name }}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 Building version: $VERSION"
 
@@ -79,13 +72,12 @@ jobs:
         id: zip
         run: |
           mkdir -p releases
-          cd releases
-          ditto -c -k --keepParent "${{ steps.app.outputs.app_path }}" "DHBootlegToolkit-${{ steps.version.outputs.version }}.zip"
+          ditto -c -k --keepParent "${{ steps.app.outputs.app_path }}" "releases/DHBootlegToolkit-${{ steps.version.outputs.version }}.zip"
           ZIP_FILE="DHBootlegToolkit-${{ steps.version.outputs.version }}.zip"
           echo "zip_file=$ZIP_FILE" >> $GITHUB_OUTPUT
           echo "zip_path=releases/$ZIP_FILE" >> $GITHUB_OUTPUT
 
-          SIZE=$(du -h "$ZIP_FILE" | awk '{print $1}')
+          SIZE=$(du -h "releases/$ZIP_FILE" | awk '{print $1}')
           echo "size=$SIZE" >> $GITHUB_OUTPUT
           echo "📦 Created: $ZIP_FILE ($SIZE)"
 
@@ -98,7 +90,6 @@ jobs:
           echo "🔐 SHA256: $SHA"
 
       - name: Upload to release
-        if: github.event_name == 'release'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -106,17 +97,6 @@ jobs:
             ${{ steps.zip.outputs.zip_path }} \
             --clobber
           echo "✅ Uploaded to release ${{ steps.version.outputs.version }}"
-
-      - name: Create release if from tag push
-        if: github.event_name == 'push'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create ${{ steps.version.outputs.version }} \
-            ${{ steps.zip.outputs.zip_path }} \
-            --title "DHBootlegToolkit ${{ steps.version.outputs.version }}" \
-            --notes "Release ${{ steps.version.outputs.version }}"
-          echo "✅ Created release ${{ steps.version.outputs.version }}"
 
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -168,7 +148,6 @@ jobs:
     name: Update Homebrew Cask
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'release'
 
     steps:
       - name: Update Homebrew cask
