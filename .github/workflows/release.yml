@@ -3,9 +3,6 @@ name: Release
 on:
   release:
     types: [published]
-  push:
-    tags:
-      - '*'
 
 jobs:
   build:
@@ -23,11 +20,7 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            VERSION="${{ github.event.release.tag_name }}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/}"
-          fi
+          VERSION="${{ github.event.release.tag_name }}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 Building version: $VERSION"
 
@@ -98,7 +91,6 @@ jobs:
           echo "🔐 SHA256: $SHA"
 
       - name: Upload to release
-        if: github.event_name == 'release'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -106,17 +98,6 @@ jobs:
             ${{ steps.zip.outputs.zip_path }} \
             --clobber
           echo "✅ Uploaded to release ${{ steps.version.outputs.version }}"
-
-      - name: Create release if from tag push
-        if: github.event_name == 'push'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create ${{ steps.version.outputs.version }} \
-            ${{ steps.zip.outputs.zip_path }} \
-            --title "DHBootlegToolkit ${{ steps.version.outputs.version }}" \
-            --notes "Release ${{ steps.version.outputs.version }}"
-          echo "✅ Created release ${{ steps.version.outputs.version }}"
 
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -168,7 +149,6 @@ jobs:
     name: Update Homebrew Cask
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'release'
 
     steps:
       - name: Update Homebrew cask
