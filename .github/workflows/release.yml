@@ -150,25 +150,45 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - name: Update Homebrew cask
-        uses: macauley/action-homebrew-bump-cask@v1
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
         with:
+          repository: lRoMYl/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          tap: lRoMYl/homebrew-tap
-          cask: dhbootlegtoolkit
-          livecheck: false
-          dryrun: false
-        continue-on-error: true
+          path: homebrew-tap
 
-      - name: Manual Homebrew update fallback
-        if: failure()
+      - name: Update cask file
         run: |
-          echo "⚠️  Automated Homebrew update failed"
-          echo "📝 Manual update required:"
-          echo ""
-          echo "Update homebrew-tap/Casks/dhbootlegtoolkit.rb:"
-          echo "  version \"${{ needs.build.outputs.version }}\""
-          echo "  sha256 \"${{ needs.build.outputs.sha256 }}\""
-          echo ""
-          echo "Download URL:"
-          echo "  https://github.com/${{ github.repository }}/releases/download/${{ needs.build.outputs.version }}/${{ needs.build.outputs.zip_file }}"
+          VERSION="${{ needs.build.outputs.version }}"
+          SHA256="${{ needs.build.outputs.sha256 }}"
+          CASK_FILE="homebrew-tap/Casks/dhbootlegtoolkit.rb"
+
+          if [ ! -f "$CASK_FILE" ]; then
+            echo "❌ Cask file not found: $CASK_FILE"
+            exit 1
+          fi
+
+          # Update version
+          sed -i '' "s/version \".*\"/version \"$VERSION\"/" "$CASK_FILE"
+
+          # Update sha256
+          sed -i '' "s/sha256 \".*\"/sha256 \"$SHA256\"/" "$CASK_FILE"
+
+          echo "✅ Updated cask file:"
+          grep -E "(version|sha256)" "$CASK_FILE"
+
+      - name: Commit and push cask update
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add Casks/dhbootlegtoolkit.rb
+
+          if git diff --staged --quiet; then
+            echo "✅ No changes to commit (already up to date)"
+          else
+            git commit -m "dhbootlegtoolkit ${{ needs.build.outputs.version }}"
+            git push
+            echo "✅ Homebrew cask updated to ${{ needs.build.outputs.version }}"
+          fi
