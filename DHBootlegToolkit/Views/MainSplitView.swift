@@ -106,6 +106,13 @@ struct AlertModifiers: ViewModifier {
                     Text(message)
                 }
             }
+            .alert("State Management Error", isPresented: $store.showStateManagementError) {
+                Button("OK", role: .cancel) {
+                    store.stateManagementErrorMessage = nil
+                }
+            } message: {
+                Text(store.stateManagementErrorMessage ?? "An unexpected state error occurred.")
+            }
             .alert("Invalid Repository", isPresented: $store.showRepositoryError) {
                 Button("Choose Another") {
                     store.showRepositoryPickerDialog = true

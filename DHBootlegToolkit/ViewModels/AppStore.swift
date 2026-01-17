@@ -1,6 +1,7 @@
 import SwiftUI
 import Observation
 import DHBootlegToolkitCore
+import OSLog
 
 // MARK: - Detail Tab Model
 
@@ -54,6 +55,7 @@ final class AppStore {
     // MARK: - Configuration
 
     private let configuration: RepositoryConfiguration
+    private let logger = Logger(subsystem: "com.dhbootlegtoolkit", category: "AppStore")
 
     init(configuration: RepositoryConfiguration = PandoraRepositoryConfiguration()) {
         self.configuration = configuration
@@ -150,6 +152,10 @@ final class AppStore {
     var showUnsavedChangesWarning = false
     var pendingKeySelection: (key: TranslationKey, feature: FeatureFolder)?
 
+    // State management error state
+    var showStateManagementError = false
+    var stateManagementErrorMessage: String?
+
     // MARK: - Workers
 
     private var fileSystemWorker: FileSystemWorker?
@@ -197,12 +203,35 @@ final class AppStore {
     var editedKey: TranslationKey? {
         get { activeKeyTab?.editedKey }
         set {
-            guard let tabId = activeTabId,
-                  let index = openTabs.firstIndex(where: { $0.id == tabId }),
-                  case .key(var keyData) = openTabs[index],
-                  let newValue else { return }
+            guard let newValue else {
+                logger.warning("editedKey setter: newValue is nil, ignoring")
+                return
+            }
+
+            guard let tabId = activeTabId else {
+                logger.error("editedKey setter: activeTabId is nil")
+                stateManagementErrorMessage = "Cannot save changes: No active tab. Please close and reopen the translation key."
+                showStateManagementError = true
+                return
+            }
+
+            guard let index = openTabs.firstIndex(where: { $0.id == tabId }) else {
+                logger.error("editedKey setter: Tab with ID \(tabId) not found in openTabs")
+                stateManagementErrorMessage = "Cannot save changes: Tab was closed. Please reopen the translation key."
+                showStateManagementError = true
+                return
+            }
+
+            guard case .key(var keyData) = openTabs[index] else {
+                logger.error("editedKey setter: Tab at index \(index) is not a key tab")
+                stateManagementErrorMessage = "Cannot save changes: Invalid tab type. Please close and reopen the translation key."
+                showStateManagementError = true
+                return
+            }
+
             keyData.editedKey = newValue
             openTabs[index] = .key(keyData)
+            logger.debug("editedKey setter: Successfully updated edited key for tab \(tabId)")
         }
     }
 
@@ -210,11 +239,30 @@ final class AppStore {
     var hasChanges: Bool {
         get { activeKeyTab?.hasChanges ?? false }
         set {
-            guard let tabId = activeTabId,
-                  let index = openTabs.firstIndex(where: { $0.id == tabId }),
-                  case .key(var keyData) = openTabs[index] else { return }
+            guard let tabId = activeTabId else {
+                logger.error("hasChanges setter: activeTabId is nil")
+                stateManagementErrorMessage = "Cannot update change state: No active tab. Please close and reopen the translation key."
+                showStateManagementError = true
+                return
+            }
+
+            guard let index = openTabs.firstIndex(where: { $0.id == tabId }) else {
+                logger.error("hasChanges setter: Tab with ID \(tabId) not found in openTabs")
+                stateManagementErrorMessage = "Cannot update change state: Tab was closed. Please reopen the translation key."
+                showStateManagementError = true
+                return
+            }
+
+            guard case .key(var keyData) = openTabs[index] else {
+                logger.error("hasChanges setter: Tab at index \(index) is not a key tab")
+                stateManagementErrorMessage = "Cannot update change state: Invalid tab type. Please close and reopen the translation key."
+                showStateManagementError = true
+                return
+            }
+
             keyData.hasChanges = newValue
             openTabs[index] = .key(keyData)
+            logger.debug("hasChanges setter: Successfully updated hasChanges to \(newValue) for tab \(tabId)")
         }
     }
 
@@ -972,11 +1020,30 @@ final class AppStore {
 
     /// Update the edited key in the active tab
     func updateActiveTabKey(_ key: TranslationKey?) {
-        guard let tabId = activeTabId,
-              let index = openTabs.firstIndex(where: { $0.id == tabId }),
-              case .key(var keyData) = openTabs[index] else { return }
+        guard let tabId = activeTabId else {
+            logger.error("updateActiveTabKey: activeTabId is nil")
+            stateManagementErrorMessage = "Cannot update key: No active tab. Please close and reopen the translation key."
+            showStateManagementError = true
+            return
+        }
+
+        guard let index = openTabs.firstIndex(where: { $0.id == tabId }) else {
+            logger.error("updateActiveTabKey: Tab with ID \(tabId) not found in openTabs")
+            stateManagementErrorMessage = "Cannot update key: Tab was closed. Please reopen the translation key."
+            showStateManagementError = true
+            return
+        }
+
+        guard case .key(var keyData) = openTabs[index] else {
+            logger.error("updateActiveTabKey: Tab at index \(index) is not a key tab")
+            stateManagementErrorMessage = "Cannot update key: Invalid tab type. Please close and reopen the translation key."
+            showStateManagementError = true
+            return
+        }
+
         keyData.editedKey = key
         openTabs[index] = .key(keyData)
+        logger.debug("updateActiveTabKey: Successfully updated key for tab \(tabId)")
     }
 
     // MARK: - Translation Key Management
