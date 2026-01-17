@@ -99,10 +99,33 @@ This is a **one-time setup** that's already done for this repository. If you're 
 
 ### GitHub Repository Settings
 
-1. **Personal Access Token:**
-   - Create a token at: GitHub Settings → Developer settings → Personal access tokens
-   - Scopes needed: `public_repo`, `workflow`
-   - Add as repository secret: `HOMEBREW_TAP_TOKEN`
+1. **Personal Access Token (HOMEBREW_TAP_TOKEN):**
+
+   This token allows the workflow to update your homebrew-tap repository automatically.
+
+   **Option A: Fine-Grained Token (Recommended)**
+   - More secure - can be limited to just the homebrew-tap repository
+   - Steps to create:
+     1. Go to: Settings → Developer settings → Personal access tokens → Fine-grained tokens
+     2. Click "Generate new token"
+     3. Repository access: "Only select repositories" → `lRoMYl/homebrew-tap`
+     4. Permissions → Repository permissions → Contents: "Read and write"
+     5. Generate and copy the token
+
+   **Option B: Classic Token**
+   - Simpler but has access to ALL your repositories
+   - Steps to create:
+     1. Go to: Settings → Developer settings → Personal access tokens → Tokens (classic)
+     2. Click "Generate new token (classic)"
+     3. Scopes: Select `repo` (or `public_repo` if tap is public)
+     4. Generate and copy the token
+
+   **Add to repository:**
+   1. Go to: https://github.com/lRoMYl/DHBootlegToolkit/settings/secrets/actions
+   2. Click "New repository secret"
+   3. Name: `HOMEBREW_TAP_TOKEN`
+   4. Value: Paste your token
+   5. Click "Add secret"
 
 2. **Workflow Permissions:**
    - Repository Settings → Actions → General → Workflow permissions
@@ -190,6 +213,30 @@ The manual script is kept as a backup and for local testing.
    - Edit `Casks/dhbootlegtoolkit.rb` in homebrew-tap
    - Update `version` and `sha256` (from workflow output)
    - Commit and push
+
+### Token Authentication Failed
+
+**Problem:** Workflow fails with "Input required and not supplied: token" or authentication errors.
+
+**Solution:**
+1. **Verify secret exists:**
+   - Visit: https://github.com/lRoMYl/DHBootlegToolkit/settings/secrets/actions
+   - Check that `HOMEBREW_TAP_TOKEN` is listed
+
+2. **Check token permissions:**
+   - Go to: https://github.com/settings/tokens
+   - Find your token (or create a new one if expired)
+   - For fine-grained tokens: Verify it has access to `lRoMYl/homebrew-tap` with "Contents: Read and write"
+   - For classic tokens: Verify it has the `repo` scope checked
+
+3. **Token expired:**
+   - Fine-grained and classic tokens have expiration dates
+   - If expired, generate a new token with the same scopes
+   - Update the `HOMEBREW_TAP_TOKEN` secret with the new value
+
+4. **Test the setup:**
+   - Create a test release (e.g., `0.0.3-test`) to verify the workflow runs successfully
+   - Check the "Update Homebrew Cask" job logs for any authentication errors
 
 ### Build Succeeded but Zip Invalid
 

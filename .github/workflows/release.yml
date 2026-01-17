@@ -150,6 +150,22 @@ jobs:
     runs-on: macos-latest
 
     steps:
+      - name: Verify HOMEBREW_TAP_TOKEN
+        run: |
+          if [ -z "${{ secrets.HOMEBREW_TAP_TOKEN }}" ]; then
+            echo "❌ ERROR: HOMEBREW_TAP_TOKEN secret is not set or is empty"
+            echo "Please set the secret at: https://github.com/lRoMYl/DHBootlegToolkit/settings/secrets/actions"
+            exit 1
+          fi
+
+          TOKEN="${{ secrets.HOMEBREW_TAP_TOKEN }}"
+          if [[ ! "$TOKEN" =~ ^github_pat_ ]]; then
+            echo "⚠️  WARNING: Token doesn't start with 'github_pat_' (expected for fine-grained tokens)"
+            echo "If using a classic token, this is normal (starts with 'ghp_')"
+          else
+            echo "✅ Token appears to be a valid fine-grained token"
+          fi
+
       - name: Checkout homebrew-tap
         uses: actions/checkout@v4
         with:
