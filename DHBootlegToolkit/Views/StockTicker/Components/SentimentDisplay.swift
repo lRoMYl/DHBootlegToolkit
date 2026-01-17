@@ -117,6 +117,7 @@ struct SentimentDisplay: View {
 
 // MARK: - Previews
 
+#if DEBUG
 #Preview("Positive") {
     SentimentDisplay(sentiment: MarketSentiment(
         emoji: "📈",
@@ -173,3 +174,4 @@ struct SentimentDisplay: View {
     .padding()
     .frame(width: 600)
 }
+#endif

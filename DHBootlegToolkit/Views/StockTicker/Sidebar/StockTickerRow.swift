@@ -86,6 +86,7 @@ struct StockTickerRow: View {
     }
 }
 
+#if DEBUG
 #Preview("DHER.DE - Up") {
     PreviewWrapper()
 }
@@ -134,3 +135,4 @@ private struct PreviewWrapper2: View {
         .frame(width: 280, height: 100)
     }
 }
+#endif

@@ -61,8 +61,10 @@ extension StockData {
     }
 }
 
+#if DEBUG
 #Preview {
     MarketStatsGrid(stock: .mockDHER)
         .padding()
         .frame(width: 600)
 }
+#endif
