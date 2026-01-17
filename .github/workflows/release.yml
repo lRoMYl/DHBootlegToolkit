@@ -114,7 +114,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: master
           fetch-depth: 0
 
       - name: Update project.yml
@@ -140,14 +140,14 @@ jobs:
             echo "✅ No version changes needed (already up to date)"
           else
             git commit -m "chore: bump version to ${{ needs.build.outputs.version }} [skip ci]"
-            git push origin main
+            git push origin master
             echo "✅ Version synced to repository"
           fi
 
   update-homebrew:
     name: Update Homebrew Cask
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
 
     steps:
       - name: Update Homebrew cask
