@@ -290,9 +290,7 @@ struct JSONStringRowEditor: View {
                 .font(.system(.body, design: .monospaced))
                 .focused($isFocused)
                 .onSubmit {
-                    if editedValue != value {
-                        onCommit(editedValue)
-                    }
+                    onCommit(editedValue)  // Always commit, let store handle duplicates
                     isEditing = false
                 }
                 .onExitCommand {
@@ -305,6 +303,7 @@ struct JSONStringRowEditor: View {
                 .foregroundStyle(.green)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .contentShape(Rectangle())
                 .onTapGesture(count: 2) {
                     editedValue = value
                     isEditing = true
@@ -353,6 +352,9 @@ struct JSONNumberRowEditor: View {
                 .onSubmit {
                     if let newNumber = parseNumber(editedValue) {
                         onCommit(newNumber)
+                    } else {
+                        // If parsing fails, revert to original value
+                        editedValue = value.stringValue
                     }
                     isEditing = false
                 }
@@ -364,6 +366,7 @@ struct JSONNumberRowEditor: View {
             Text(value.stringValue)
                 .font(.system(.body, design: .monospaced))
                 .foregroundStyle(.purple)
+                .contentShape(Rectangle())
                 .onTapGesture(count: 2) {
                     editedValue = value.stringValue
                     isEditing = true

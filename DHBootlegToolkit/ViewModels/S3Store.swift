@@ -1098,8 +1098,13 @@ final class S3Store {
         // Determine what data to write
         let dataToWrite: Data
 
+        // Check if file already exists on disk (to prevent sparse restore on subsequent saves)
+        let fileManager = FileManager.default
+        let fileExists = fileManager.fileExists(atPath: country.configURL.path)
+
         // For deleted files with partial edits, construct sparse JSON
-        if country.gitStatus == .deleted && !country.editedPaths.isEmpty {
+        // Only do this on FIRST save (when file doesn't exist yet)
+        if country.gitStatus == .deleted && !country.editedPaths.isEmpty && !fileExists {
             // Build sparse JSON containing only edited fields
             if let sparseCountry = country.withSparseJSON(editedPaths: country.editedPaths),
                let sparseData = sparseCountry.configData {
@@ -1121,7 +1126,6 @@ final class S3Store {
 
         // For deleted files, recreate parent directory
         let parentDir = country.configURL.deletingLastPathComponent()
-        let fileManager = FileManager.default
 
         if !fileManager.fileExists(atPath: parentDir.path) {
             try fileManager.createDirectory(at: parentDir, withIntermediateDirectories: true)

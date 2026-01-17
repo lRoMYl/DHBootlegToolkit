@@ -225,6 +225,14 @@ extension S3CountryConfig {
                 nestedArray[index] = nestedDict
             }
             json[key] = nestedArray
+        } else {
+            // Parent path doesn't exist - create it (handles deleted fields in sparse JSON)
+            #if DEBUG
+            print("[setValueInJSON] Creating missing parent path: \(key)")
+            #endif
+            var newNested: [String: Any] = [:]
+            setValueInJSON(&newNested, at: remainingPath, value: value)
+            json[key] = newNested
         }
     }
 

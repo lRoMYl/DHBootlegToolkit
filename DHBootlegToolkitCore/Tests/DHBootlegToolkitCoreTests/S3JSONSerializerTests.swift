@@ -1889,3 +1889,279 @@ struct S3JSONSerializerObjectKeyOrderTests {
         #expect(pinDistanceIndex < pinMinDistanceIndex, "pin_distance should come before pin_min_distance")
     }
 }
+
+// MARK: - Missing Parent Path Tests (Sparse JSON Edge Cases)
+
+@Suite("S3CountryConfig Missing Parent Path Tests")
+struct S3CountryConfigMissingParentPathTests {
+
+    /// Creates a test S3CountryConfig with the given JSON content
+    private func createConfig(json: String) -> S3CountryConfig {
+        let data = json.data(using: .utf8)!
+        return S3CountryConfig(
+            countryCode: "test",
+            configURL: URL(fileURLWithPath: "/tmp/test/config.json"),
+            configData: data,
+            originalContent: json,
+            hasChanges: false,
+            gitStatus: .deleted,
+            isDeletedPlaceholder: false,
+            editedPaths: []
+        )
+    }
+
+    @Test("Edit field with missing parent path creates parent structure")
+    func editFieldWithMissingParentPathCreatesParent() {
+        // Arrange: Sparse JSON with only one branch
+        let sparseJSON = """
+        {
+          "data": {
+            "feature_flags": {
+              "dark_mode": true
+            }
+          }
+        }
+        """
+
+        let config = createConfig(json: sparseJSON)
+
+        // Act: Edit a field whose parent path doesn't exist
+        // Path: data.subscription.enabled (subscription doesn't exist)
+        let updated = config.withUpdatedValue(true, at: ["data", "subscription", "enabled"])
+
+        // Assert
+        #expect(updated != nil, "Update should succeed even with missing parent")
+
+        guard let updated = updated else { return }
+        guard let resultJSON = updated.parseConfigJSON() else {
+            Issue.record("Failed to parse updated JSON")
+            return
+        }
+
+        let dataDict = resultJSON["data"] as? [String: Any]
+        #expect(dataDict != nil)
+
+        // Verify new parent was created
+        let subscription = dataDict?["subscription"] as? [String: Any]
+        #expect(subscription != nil, "Missing parent 'subscription' should be created")
+        #expect(subscription?["enabled"] as? Bool == true, "Value should be set correctly")
+
+        // Verify existing branch is preserved
+        let featureFlags = dataDict?["feature_flags"] as? [String: Any]
+        #expect(featureFlags != nil, "Existing 'feature_flags' should be preserved")
+        #expect(featureFlags?["dark_mode"] as? Bool == true, "Existing value should be unchanged")
+    }
+
+    @Test("Edit deeply nested field with multiple missing parent levels")
+    func editDeeplyNestedFieldWithMultipleMissingParents() {
+        // Arrange: Minimal JSON structure
+        let sparseJSON = """
+        {
+          "data": {
+            "existing": "value"
+          }
+        }
+        """
+
+        let config = createConfig(json: sparseJSON)
+
+        // Act: Edit a deeply nested field where multiple parents are missing
+        // Path: data.features.advanced.settings.enabled
+        // Need to create: features -> advanced -> settings
+        let updated = config.withUpdatedValue(true, at: ["data", "features", "advanced", "settings", "enabled"])
+
+        // Assert
+        #expect(updated != nil, "Update should succeed with multiple missing parents")
+
+        guard let updated = updated else { return }
+        guard let resultJSON = updated.parseConfigJSON() else {
+            Issue.record("Failed to parse updated JSON")
+            return
+        }
+
+        // Verify entire path was created
+        let dataDict = resultJSON["data"] as? [String: Any]
+        let features = dataDict?["features"] as? [String: Any]
+        let advanced = features?["advanced"] as? [String: Any]
+        let settings = advanced?["settings"] as? [String: Any]
+
+        #expect(features != nil, "First missing parent 'features' should be created")
+        #expect(advanced != nil, "Second missing parent 'advanced' should be created")
+        #expect(settings != nil, "Third missing parent 'settings' should be created")
+        #expect(settings?["enabled"] as? Bool == true, "Value should be set at leaf")
+
+        // Verify existing field is preserved
+        #expect(dataDict?["existing"] as? String == "value", "Existing sibling should be preserved")
+    }
+
+    @Test("Multiple edits with missing parents create correct structure")
+    func multipleEditsWithMissingParentsCreateCorrectStructure() {
+        // Arrange: Start with minimal structure
+        let sparseJSON = """
+        {
+          "data": {
+            "root_field": "value"
+          }
+        }
+        """
+
+        var config = createConfig(json: sparseJSON)
+
+        // Act: Make multiple edits with different missing parent paths
+        config = config.withUpdatedValue("value1", at: ["data", "parent1", "child1"])!
+        config = config.withUpdatedValue("value2", at: ["data", "parent2", "child2"])!
+        config = config.withUpdatedValue("value3", at: ["data", "parent1", "child3"])!  // Reuse parent1
+
+        // Assert
+        guard let resultJSON = config.parseConfigJSON() else {
+            Issue.record("Failed to parse JSON")
+            return
+        }
+
+        let dataDict = resultJSON["data"] as? [String: Any]
+        let parent1 = dataDict?["parent1"] as? [String: Any]
+        let parent2 = dataDict?["parent2"] as? [String: Any]
+
+        // Verify both parents created
+        #expect(parent1 != nil, "Parent1 should be created")
+        #expect(parent2 != nil, "Parent2 should be created")
+
+        // Verify children under correct parents
+        #expect(parent1?["child1"] as? String == "value1")
+        #expect(parent1?["child3"] as? String == "value3", "Second edit should reuse parent1")
+        #expect(parent2?["child2"] as? String == "value2")
+
+        // Verify root field preserved
+        #expect(dataDict?["root_field"] as? String == "value")
+
+        // Verify editedPaths tracks all edits
+        #expect(config.editedPaths.contains("data.parent1.child1"))
+        #expect(config.editedPaths.contains("data.parent2.child2"))
+        #expect(config.editedPaths.contains("data.parent1.child3"))
+        #expect(config.editedPaths.count == 3)
+    }
+
+    @Test("Edit with missing parent preserves sibling branches")
+    func editWithMissingParentPreservesSiblingBranches() {
+        // Arrange: JSON with multiple sibling branches
+        let sparseJSON = """
+        {
+          "data": {
+            "branch_a": {
+              "field_a": "value_a"
+            },
+            "branch_b": {
+              "field_b": "value_b"
+            }
+          }
+        }
+        """
+
+        let config = createConfig(json: sparseJSON)
+
+        // Act: Add a new branch with missing parent
+        let updated = config.withUpdatedValue("value_c", at: ["data", "branch_c", "field_c"])
+
+        // Assert
+        #expect(updated != nil)
+
+        guard let updated = updated else { return }
+        guard let resultJSON = updated.parseConfigJSON() else {
+            Issue.record("Failed to parse JSON")
+            return
+        }
+
+        let dataDict = resultJSON["data"] as? [String: Any]
+
+        // Verify all three branches exist
+        let branchA = dataDict?["branch_a"] as? [String: Any]
+        let branchB = dataDict?["branch_b"] as? [String: Any]
+        let branchC = dataDict?["branch_c"] as? [String: Any]
+
+        #expect(branchA != nil, "Existing branch_a should be preserved")
+        #expect(branchB != nil, "Existing branch_b should be preserved")
+        #expect(branchC != nil, "New branch_c should be created")
+
+        // Verify values
+        #expect(branchA?["field_a"] as? String == "value_a")
+        #expect(branchB?["field_b"] as? String == "value_b")
+        #expect(branchC?["field_c"] as? String == "value_c")
+    }
+
+    @Test("Edit with missing parent works with different value types")
+    func editWithMissingParentWorksWithDifferentValueTypes() {
+        // Arrange: Empty structure
+        let sparseJSON = """
+        {
+          "data": {}
+        }
+        """
+
+        var config = createConfig(json: sparseJSON)
+
+        // Act: Add fields with different types, all with missing parents
+        config = config.withUpdatedValue("string_value", at: ["data", "string_parent", "field"])!
+        config = config.withUpdatedValue(42, at: ["data", "number_parent", "field"])!
+        config = config.withUpdatedValue(true, at: ["data", "bool_parent", "field"])!
+        config = config.withUpdatedValue(["array", "values"], at: ["data", "array_parent", "field"])!
+
+        // Assert
+        guard let resultJSON = config.parseConfigJSON() else {
+            Issue.record("Failed to parse JSON")
+            return
+        }
+
+        let dataDict = resultJSON["data"] as? [String: Any]
+
+        let stringParent = dataDict?["string_parent"] as? [String: Any]
+        let numberParent = dataDict?["number_parent"] as? [String: Any]
+        let boolParent = dataDict?["bool_parent"] as? [String: Any]
+        let arrayParent = dataDict?["array_parent"] as? [String: Any]
+
+        #expect(stringParent?["field"] as? String == "string_value")
+        #expect(numberParent?["field"] as? Int == 42)
+        #expect(boolParent?["field"] as? Bool == true)
+
+        let arrayValue = arrayParent?["field"] as? [String]
+        #expect(arrayValue != nil)
+        #expect(arrayValue?.count == 2)
+        #expect(arrayValue?[0] == "array")
+        #expect(arrayValue?[1] == "values")
+    }
+
+    @Test("Edit with missing root level parent creates it")
+    func editWithMissingRootLevelParentCreatesIt() {
+        // Arrange: Sparse JSON with one root field
+        let sparseJSON = """
+        {
+          "existing_root": {
+            "field": "value"
+          }
+        }
+        """
+
+        let config = createConfig(json: sparseJSON)
+
+        // Act: Add a new root-level parent
+        let updated = config.withUpdatedValue("new_value", at: ["new_root", "field"])
+
+        // Assert
+        #expect(updated != nil)
+
+        guard let updated = updated else { return }
+        guard let resultJSON = updated.parseConfigJSON() else {
+            Issue.record("Failed to parse JSON")
+            return
+        }
+
+        // Verify both root-level objects exist
+        let existingRoot = resultJSON["existing_root"] as? [String: Any]
+        let newRoot = resultJSON["new_root"] as? [String: Any]
+
+        #expect(existingRoot != nil, "Existing root should be preserved")
+        #expect(newRoot != nil, "New root should be created")
+
+        #expect(existingRoot?["field"] as? String == "value")
+        #expect(newRoot?["field"] as? String == "new_value")
+    }
+}

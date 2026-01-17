@@ -60,7 +60,7 @@ final class JSONTreeViewModel {
     private var editedPaths: Set<String> = []
 
     /// Change status for each path compared to git HEAD (only includes changed paths)
-    private var pathChangeStatus: [String: JSONChangeStatus] = [:]
+    internal private(set) var pathChangeStatus: [String: JSONChangeStatus] = [:]
 
     /// Whether to show only changed fields
     private var showChangedFieldsOnly: Bool = false
@@ -132,6 +132,10 @@ final class JSONTreeViewModel {
         if expandAllByDefault {
             let pathStart = CFAbsoluteTimeGetCurrent()
             expandedPaths = collectAllExpandablePaths(from: json, parentPath: [])
+            // Also collect paths from originalJSON to include deleted fields
+            if let original = originalJSON {
+                expandedPaths.formUnion(collectAllExpandablePaths(from: original, parentPath: []))
+            }
             // Remove manually collapsed
             expandedPaths.subtract(manuallyCollapsed)
             pathDuration = CFAbsoluteTimeGetCurrent() - pathStart
@@ -220,7 +224,24 @@ final class JSONTreeViewModel {
         let diffStatuses = originalJSON != nil ?
             JSONDiffUtility.computeChanges(current: json, original: originalJSON!) : [:]
 
-        func traverse(_ value: Any, path: [String]) {
+        // Helper to traverse deleted nodes (only in original, not in current)
+        func traverseDeleted(_ value: Any, path: [String]) {
+            let pathString = path.joined(separator: ".")
+            result[pathString] = .deleted
+
+            // Recurse into children of deleted nodes
+            if let dict = value as? [String: Any] {
+                for (key, childValue) in dict {
+                    traverseDeleted(childValue, path: path + [key])
+                }
+            } else if let array = value as? [Any] {
+                for (index, childValue) in array.enumerated() {
+                    traverseDeleted(childValue, path: path + [String(index)])
+                }
+            }
+        }
+
+        func traverse(_ value: Any, path: [String], existsInOriginal: Bool) {
             let pathString = path.joined(separator: ".")
 
             // Check if this path or any parent path was edited
@@ -236,21 +257,58 @@ final class JSONTreeViewModel {
                 result[pathString] = fileChangeStatus
             }
 
-            // Recurse into children
+            // Recurse into children (OPTIMIZED: only traverse deleted subtrees, not all of original)
             if let dict = value as? [String: Any] {
+                let originalDict = getOriginalValue(at: path) as? [String: Any]
+
+                // Traverse current keys
                 for (key, childValue) in dict {
-                    traverse(childValue, path: path + [key])
+                    let childExistsInOriginal = originalDict?[key] != nil
+                    traverse(childValue, path: path + [key], existsInOriginal: childExistsInOriginal)
+                }
+
+                // Traverse ONLY missing keys from original (lazy approach)
+                if let orig = originalDict {
+                    for (key, origValue) in orig where dict[key] == nil {
+                        traverseDeleted(origValue, path: path + [key])
+                    }
                 }
             } else if let array = value as? [Any] {
+                let originalArray = getOriginalValue(at: path) as? [Any]
+
+                // Traverse current array elements
                 for (index, childValue) in array.enumerated() {
-                    traverse(childValue, path: path + [String(index)])
+                    let childPath = path + [String(index)]
+                    let childExistsInOriginal = originalArray?.indices.contains(index) ?? false
+                    traverse(childValue, path: childPath, existsInOriginal: childExistsInOriginal)
+                }
+
+                // Traverse ONLY missing elements from original (lazy approach)
+                if let orig = originalArray, orig.count > array.count {
+                    for index in array.count..<orig.count {
+                        traverseDeleted(orig[index], path: path + [String(index)])
+                    }
                 }
             }
         }
 
-        // Traverse all top-level keys
-        for (key, value) in json {
-            traverse(value, path: [key])
+        // Traverse union of keys from both current and original JSON
+        var allKeys = Set(json.keys)
+        if let original = originalJSON {
+            allKeys.formUnion(original.keys)
+        }
+
+        for key in allKeys {
+            let currentValue = json[key]
+            let originalValue = originalJSON?[key]
+
+            if let value = currentValue {
+                // Field exists in current JSON
+                traverse(value, path: [key], existsInOriginal: originalValue != nil)
+            } else if let value = originalValue {
+                // Field exists only in original (deleted)
+                traverseDeleted(value, path: [key])
+            }
         }
 
         return result
@@ -297,6 +355,10 @@ final class JSONTreeViewModel {
     func expandAll() {
         manuallyCollapsed.removeAll()
         expandedPaths = collectAllExpandablePaths(from: json, parentPath: [])
+        // Also collect paths from originalJSON to include deleted fields
+        if let original = originalJSON {
+            expandedPaths.formUnion(collectAllExpandablePaths(from: original, parentPath: []))
+        }
         isAllExpanded = true
         rebuildFlattenedNodes()
     }
@@ -402,7 +464,7 @@ final class JSONTreeViewModel {
                 changeStatus = pathChangeStatus[pathString]
             }
 
-            let isExpanded = !isDeleted && self.isExpanded(pathString) // Deleted nodes don't expand
+            let isExpanded = self.isExpanded(pathString) // Allow deleted nodes to expand to show children
             let isCurrentMatch = (currentMatchPath == path)
 
             let node = FlattenedNode(
@@ -420,8 +482,8 @@ final class JSONTreeViewModel {
 
             result.append(node)
 
-            // Recursively add children if expanded (not for deleted nodes)
-            if isExpanded && !isDeleted {
+            // Recursively add children if expanded (including deleted nodes to show git HEAD structure)
+            if isExpanded {
                 if let childDict = value as? [String: Any] {
                     result += flattenJSON(childDict, parentPath: path, depth: depth + 1, parentType: .object)
                 } else if let childArray = value as? [Any] {
@@ -476,7 +538,7 @@ final class JSONTreeViewModel {
                 changeStatus = pathChangeStatus[pathString]
             }
 
-            let isExpanded = !isDeleted && self.isExpanded(pathString)
+            let isExpanded = self.isExpanded(pathString) // Allow deleted array elements to expand
             let isCurrentMatch = (currentMatchPath == path)
 
             let node = FlattenedNode(
@@ -494,8 +556,8 @@ final class JSONTreeViewModel {
 
             result.append(node)
 
-            // Recursively add children if expanded (not for deleted nodes)
-            if isExpanded && !isDeleted {
+            // Recursively add children if expanded (including deleted nodes to show git HEAD structure)
+            if isExpanded {
                 if let childDict = value as? [String: Any] {
                     result += flattenJSON(childDict, parentPath: path, depth: depth + 1, parentType: .object)
                 } else if let childArray = value as? [Any] {
