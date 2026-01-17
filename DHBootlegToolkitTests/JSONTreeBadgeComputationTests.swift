@@ -363,9 +363,9 @@ struct JSONTreeBadgeComputationTests {
 
         // Assert: Changed element has badge
         #expect(viewModel.pathChangeStatus["items"] == nil)
-        #expect(viewModel.pathChangeStatus["items.0"] == nil)  // unchanged
-        #expect(viewModel.pathChangeStatus["items.1"] == .modified)  // changed
-        #expect(viewModel.pathChangeStatus["items.2"] == nil)  // unchanged
+        #expect(viewModel.pathChangeStatus["items.[0]"] == nil)  // unchanged
+        #expect(viewModel.pathChangeStatus["items.[1]"] == .modified)  // changed
+        #expect(viewModel.pathChangeStatus["items.[2]"] == nil)  // unchanged
     }
 
     @Test("Array with new element shows [A] badge on new element")
@@ -386,9 +386,9 @@ struct JSONTreeBadgeComputationTests {
         )
 
         // Assert: Only new element has badge
-        #expect(viewModel.pathChangeStatus["items.0"] == nil)
-        #expect(viewModel.pathChangeStatus["items.1"] == nil)
-        #expect(viewModel.pathChangeStatus["items.2"] == .added)
+        #expect(viewModel.pathChangeStatus["items.[0]"] == nil)
+        #expect(viewModel.pathChangeStatus["items.[1]"] == nil)
+        #expect(viewModel.pathChangeStatus["items.[2]"] == .added)
     }
 
     @Test("Deleted array shows [D] on all elements")
@@ -411,9 +411,9 @@ struct JSONTreeBadgeComputationTests {
 
         // Assert: Array and all elements show deleted
         #expect(viewModel.pathChangeStatus["delete_array"] == .deleted)
-        #expect(viewModel.pathChangeStatus["delete_array.0"] == .deleted)
-        #expect(viewModel.pathChangeStatus["delete_array.1"] == .deleted)
-        #expect(viewModel.pathChangeStatus["delete_array.2"] == .deleted)
+        #expect(viewModel.pathChangeStatus["delete_array.[0]"] == .deleted)
+        #expect(viewModel.pathChangeStatus["delete_array.[1]"] == .deleted)
+        #expect(viewModel.pathChangeStatus["delete_array.[2]"] == .deleted)
     }
 
     // MARK: - Complex Scenarios
@@ -620,5 +620,61 @@ struct JSONTreeBadgeComputationTests {
 
         // Assert: Number change shows modified
         #expect(viewModel.pathChangeStatus["count"] == .modified)
+    }
+
+    // MARK: - Hybrid Mode Tests (Deleted/Added Files with Sparse JSON)
+
+    @Test("Deleted file with array elements shows [D] badges in hybrid mode")
+    func deletedFileWithArrayElementsShowsDeletedBadges() {
+        // Arrange: Deleted file with array of objects, sparse restore
+        let original: [String: Any] = [
+            "items": [
+                ["name": "Item 1", "id": 1],
+                ["name": "Item 2", "id": 2]
+            ]
+        ]
+
+        let sparse: [String: Any] = [
+            "items": [
+                ["name": "Updated Item 1"]  // Only edited field
+            ]
+        ]
+
+        let viewModel = createViewModel(
+            json: sparse,
+            originalJSON: original,
+            fileGitStatus: .deleted,
+            editedPaths: ["items.[0].name"]
+        )
+
+        // Assert: Leaf values show correct badges (focus on leaf values, not containers)
+        #expect(viewModel.pathChangeStatus["items.[0].name"] == .modified)  // Edited field
+        #expect(viewModel.pathChangeStatus["items.[0].id"] == .deleted)  // Not in sparse
+        #expect(viewModel.pathChangeStatus["items.[1].name"] == .deleted)  // Element not in sparse
+        #expect(viewModel.pathChangeStatus["items.[1].id"] == .deleted)  // Element not in sparse
+    }
+
+    @Test("Deleted file with primitive array shows [D] badges")
+    func deletedFileWithPrimitiveArrayShowsDeletedBadges() {
+        // Arrange: Deleted file with primitive array
+        let original: [String: Any] = [
+            "tags": ["tag1", "tag2", "tag3"]
+        ]
+
+        let sparse: [String: Any] = [
+            "tags": ["tag1", "updated-tag"]
+        ]
+
+        let viewModel = createViewModel(
+            json: sparse,
+            originalJSON: original,
+            fileGitStatus: .deleted,
+            editedPaths: ["tags.[1]"]
+        )
+
+        // Assert: Array elements (leaf values) show correct badges
+        #expect(viewModel.pathChangeStatus["tags.[0]"] == .deleted)  // Unchanged, file deleted
+        #expect(viewModel.pathChangeStatus["tags.[1]"] == .modified)  // Edited
+        #expect(viewModel.pathChangeStatus["tags.[2]"] == .deleted)  // Not in sparse
     }
 }

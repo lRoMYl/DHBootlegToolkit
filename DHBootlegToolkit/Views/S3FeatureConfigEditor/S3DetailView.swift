@@ -49,6 +49,15 @@ struct S3DetailView: View {
     @State private var showDeleteArrayElementConfirmation: Bool = false
     @State private var deleteArrayElementPath: [String] = []
 
+    // Validation state
+    @State private var validationResult: JSONSchemaValidationResult?
+    @State private var showValidationPanel: Bool = true
+    @State private var validationDebounceTask: Task<Void, Never>?
+    @State private var isValidating: Bool = false
+
+    // Scroll proxy for navigation to errors
+    @State private var scrollProxy: ScrollViewProxy?
+
     var body: some View {
         if store.isLoading {
             VStack {
@@ -83,7 +92,12 @@ struct S3DetailView: View {
     @ViewBuilder
     private func countryDetailView(_ country: S3CountryConfig) -> some View {
         VStack(spacing: 0) {
-            S3DetailHeader(country: country, isReadOnly: isReadOnly)
+            S3DetailHeader(
+                country: country,
+                isReadOnly: isReadOnly,
+                validationResult: $validationResult,
+                showValidationPanel: $showValidationPanel
+            )
 
             // Deleted placeholder notice
             if country.isDeletedPlaceholder {
@@ -129,6 +143,25 @@ struct S3DetailView: View {
 
             Divider()
 
+            // Validation panel or loading indicator
+            if isValidating {
+                // Show loading state
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Validating configuration...")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(8)
+                .padding(.horizontal)
+                .padding(.top, 8)
+            } else if let result = validationResult, !result.errors.isEmpty, showValidationPanel {
+                validationPanel(result: result)
+            }
+
             treeContentSection(country)
         }
         .task(id: country.id) {
@@ -145,6 +178,21 @@ struct S3DetailView: View {
             Task { @MainActor in
                 await AppLogger.shared.time("S3 ConfigData onChange") {
                     if let json = country.parseConfigJSON() {
+                        // Debounce validation (300ms)
+                        validationDebounceTask?.cancel()
+                        validationDebounceTask = Task {
+                            try? await Task.sleep(for: .milliseconds(300))
+                            guard !Task.isCancelled else { return }
+                            await MainActor.run {
+                                Task {
+                                    isValidating = true
+                                    let validation = await store.validateCountry(country)
+                                    validationResult = validation
+                                    isValidating = false
+                                }
+                            }
+                        }
+
                         treeViewModel.configure(
                             json: json,
                             expandAllByDefault: true,
@@ -153,7 +201,9 @@ struct S3DetailView: View {
                             fileGitStatus: country.gitStatus,
                             hasInMemoryChanges: country.hasChanges,
                             editedPaths: country.editedPaths,
-                            showChangedFieldsOnly: showChangedFieldsOnly
+                            showChangedFieldsOnly: showChangedFieldsOnly,
+                            schema: store.parsedSchema,
+                            validationResult: validationResult
                         )
                     }
                 }
@@ -181,9 +231,13 @@ struct S3DetailView: View {
             Text("Are you sure you want to delete '\(deleteFieldPath.last ?? "")'? This action cannot be undone.")
         }
         .sheet(isPresented: $showInsertArrayElementSheet) {
+            // Strip brackets to handle both "[0]" and "0" formats
+            let indexString = insertArrayElementPath.last ?? "0"
+            let stripped = indexString.replacingOccurrences(of: "[", with: "")
+                                      .replacingOccurrences(of: "]", with: "")
             InsertArrayElementSheet(
                 arrayPath: Array(insertArrayElementPath.dropLast()),
-                insertIndex: Int(insertArrayElementPath.last ?? "0") ?? 0,
+                insertIndex: Int(stripped) ?? 0,
                 inferredType: insertArrayElementType
             )
         }
@@ -314,7 +368,8 @@ struct S3DetailView: View {
                     onMoveArrayElement: isReadOnly ? nil : { arrayPath, fromIndex, toIndex in
                         store.moveArrayElement(arrayPath: arrayPath, fromIndex: fromIndex, toIndex: toIndex)
                     },
-                    pathsToExpand: pathsToExpand
+                    pathsToExpand: pathsToExpand,
+                    scrollProxy: $scrollProxy
                 )
             // NOTE: Configuration is handled by parent-level task(id:) and onChange(of: configData)
             // No onAppear or onChange needed here - avoids race conditions from multiple config calls
@@ -331,6 +386,11 @@ struct S3DetailView: View {
     // MARK: - Event Handlers
 
     private func handleCountryChange(_ country: S3CountryConfig) async {
+        // Clear previous validation state immediately
+        validationResult = nil
+        isValidating = true
+        showValidationPanel = true
+
         searchQuery = ""
         debouncedQuery = ""
         searchMatches = .empty
@@ -338,6 +398,11 @@ struct S3DetailView: View {
         treeViewModel.reset()
 
         if let json = country.parseConfigJSON() {
+            // Validate country configuration
+            let validation = await store.validateCountry(country)
+            validationResult = validation
+            isValidating = false
+
             // Configure tree immediately for fast rendering (no diff badges yet)
             currentHeadJSON = nil
             treeViewModel.configure(
@@ -347,7 +412,9 @@ struct S3DetailView: View {
                 fileGitStatus: country.gitStatus,
                 hasInMemoryChanges: country.hasChanges,
                 editedPaths: country.editedPaths,
-                showChangedFieldsOnly: showChangedFieldsOnly
+                showChangedFieldsOnly: showChangedFieldsOnly,
+                schema: store.parsedSchema,
+                validationResult: validation
             )
 
             // Fetch HEAD JSON for diff badges (this may be slow but tree is already visible)
@@ -365,9 +432,13 @@ struct S3DetailView: View {
                     fileGitStatus: country.gitStatus,
                     hasInMemoryChanges: country.hasChanges,
                     editedPaths: country.editedPaths,
-                    showChangedFieldsOnly: showChangedFieldsOnly
+                    showChangedFieldsOnly: showChangedFieldsOnly,
+                    schema: store.parsedSchema,
+                    validationResult: validation
                 )
             }
+        } else {
+            isValidating = false
         }
     }
 
@@ -409,7 +480,11 @@ struct S3DetailView: View {
             if let dict = current as? [String: Any] {
                 guard let next = dict[component] else { return nil }
                 current = next
-            } else if let array = current as? [Any], let index = Int(component), index < array.count {
+            } else if let array = current as? [Any] {
+                // Strip brackets to handle both "[0]" and "0" formats
+                let stripped = component.replacingOccurrences(of: "[", with: "")
+                                        .replacingOccurrences(of: "]", with: "")
+                guard let index = Int(stripped), index < array.count else { return nil }
                 current = array[index]
             } else {
                 return nil
@@ -417,6 +492,89 @@ struct S3DetailView: View {
         }
 
         return current as? [Any]
+    }
+
+    // MARK: - Validation Panel
+
+    private func handleErrorTap(_ error: ValidationError) {
+        guard let proxy = scrollProxy else { return }
+        store.navigateToValidationError(
+            error,
+            treeViewModel: treeViewModel,
+            scrollProxy: proxy
+        )
+    }
+
+    @ViewBuilder
+    private func validationPanel(result: JSONSchemaValidationResult) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: result.errorCount > 0 ? "exclamationmark.triangle.fill" : "info.circle.fill")
+                    .foregroundStyle(result.errorCount > 0 ? .red : .orange)
+
+                Text("\(result.errorCount) error\(result.errorCount == 1 ? "" : "s")\(result.warningCount > 0 ? ", \(result.warningCount) warning\(result.warningCount == 1 ? "" : "s")" : "")")
+                    .font(.headline)
+
+                Spacer()
+
+                Button {
+                    showValidationPanel = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(result.errors) { error in
+                        ValidationErrorChip(error: error) {
+                            handleErrorTap(error)
+                        }
+                    }
+                }
+            }
+        }
+        .padding()
+        .background((result.errorCount > 0 ? Color.red : Color.orange).opacity(0.1))
+        .cornerRadius(8)
+        .padding(.horizontal)
+        .padding(.top, 8)
+    }
+}
+
+// MARK: - Validation Error Chip
+
+struct ValidationErrorChip: View {
+    let error: ValidationError
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 4) {
+                Image(systemName: error.severity == .error ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(error.severity == .error ? .red : .orange)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(error.pathString)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.primary)
+
+                    Text(error.message)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.secondary.opacity(0.1))
+            .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+        .help("Click to navigate to this error")
     }
 }
 
@@ -436,6 +594,7 @@ struct S3TreeContentView: View {
     var onDeleteArrayElement: (([String]) -> Void)? = nil
     var onMoveArrayElement: ((_ arrayPath: [String], _ fromIndex: Int, _ toIndex: Int) -> Void)? = nil
     let pathsToExpand: ([String]?) -> Set<String>
+    @Binding var scrollProxy: ScrollViewProxy?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -460,6 +619,9 @@ struct S3TreeContentView: View {
                     }
                 }
                 .padding()
+            }
+            .onAppear {
+                scrollProxy = proxy
             }
             .onChange(of: searchMatches.currentPath) { _, newPath in
                 treeViewModel.currentMatchPath = newPath
@@ -566,6 +728,8 @@ struct S3DetailHeader: View {
     @Environment(S3Store.self) private var store
     let country: S3CountryConfig
     var isReadOnly: Bool = false
+    @Binding var validationResult: JSONSchemaValidationResult?
+    @Binding var showValidationPanel: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -624,11 +788,16 @@ struct S3DetailHeader: View {
     }
 
     /// Returns true if the selected node path contains an array index (numeric path component)
-    /// e.g., "hidden_form_fields.0" or "items.1.name" would return true
+    /// e.g., "hidden_form_fields.[0]" or "items.[1].name" would return true
     private var isArrayElementSelected: Bool {
         guard let path = store.selectedNodePath else { return false }
         let components = path.split(separator: ".")
-        return components.contains { Int($0) != nil }
+        return components.contains { component in
+            // Strip brackets to handle both "[0]" and "0" formats
+            let stripped = String(component).replacingOccurrences(of: "[", with: "")
+                                            .replacingOccurrences(of: "]", with: "")
+            return Int(stripped) != nil
+        }
     }
 
     private var actionButtons: some View {
@@ -664,6 +833,11 @@ struct S3DetailHeader: View {
 
                 Button("Save") {
                     Task {
+                        // Run validation for informational purposes only
+                        let validation = await store.validateCountry(country)
+                        validationResult = validation
+
+                        // Save regardless of validation results (errors are informative only)
                         do {
                             try await store.saveCountry(country)
                         } catch {

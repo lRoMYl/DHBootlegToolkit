@@ -68,6 +68,14 @@ final class JSONTreeViewModel {
     /// Cached set of visible paths when filtering by changes
     private var cachedVisiblePaths: Set<String>? = nil
 
+    // MARK: - Schema State
+
+    /// The JSON Schema for validation and field descriptions
+    private var schema: JSONSchema? = nil
+
+    /// Validation errors by path
+    private var validationErrors: [String: ValidationError] = [:]
+
     // MARK: - Initialization
 
     init() {}
@@ -84,6 +92,8 @@ final class JSONTreeViewModel {
     ///   - hasInMemoryChanges: Whether the file has been edited in memory (affects how deleted/added files are handled)
     ///   - editedPaths: Set of paths that were explicitly edited by the user (for hybrid badge computation)
     ///   - showChangedFieldsOnly: Whether to filter the tree to show only changed fields
+    ///   - schema: The JSON Schema for validation and field descriptions
+    ///   - validationResult: The validation result for this JSON
     func configure(
         json: [String: Any],
         expandAllByDefault: Bool = true,
@@ -92,7 +102,9 @@ final class JSONTreeViewModel {
         fileGitStatus: GitFileStatus? = nil,
         hasInMemoryChanges: Bool = false,
         editedPaths: Set<String> = [],
-        showChangedFieldsOnly: Bool = false
+        showChangedFieldsOnly: Bool = false,
+        schema: JSONSchema? = nil,
+        validationResult: JSONSchemaValidationResult? = nil
     ) {
         let startTime = CFAbsoluteTimeGetCurrent()
 
@@ -103,6 +115,18 @@ final class JSONTreeViewModel {
         self.fileGitStatus = fileGitStatus
         self.editedPaths = editedPaths
         self.showChangedFieldsOnly = showChangedFieldsOnly
+        self.schema = schema
+
+        // Build validation errors map keyed by path
+        // Note: Multiple errors can exist for the same path, so we use uniquingKeysWith to keep the first error
+        if let result = validationResult {
+            self.validationErrors = Dictionary(
+                result.errors.map { error in (error.pathString, error) },
+                uniquingKeysWith: { first, _ in first }
+            )
+        } else {
+            self.validationErrors = [:]
+        }
 
         // Compute change status with hybrid approach
         if let fileStatus = fileGitStatus, (fileStatus == .deleted || fileStatus == .added) {
@@ -193,7 +217,7 @@ final class JSONTreeViewModel {
                 }
             } else if let array = value as? [Any] {
                 for (index, childValue) in array.enumerated() {
-                    traverse(childValue, path: path + [String(index)])
+                    traverse(childValue, path: path + ["[\(index)]"])
                 }
             }
         }
@@ -236,7 +260,7 @@ final class JSONTreeViewModel {
                 }
             } else if let array = value as? [Any] {
                 for (index, childValue) in array.enumerated() {
-                    traverseDeleted(childValue, path: path + [String(index)])
+                    traverseDeleted(childValue, path: path + ["[\(index)]"])
                 }
             }
         }
@@ -278,7 +302,7 @@ final class JSONTreeViewModel {
 
                 // Traverse current array elements
                 for (index, childValue) in array.enumerated() {
-                    let childPath = path + [String(index)]
+                    let childPath = path + ["[\(index)]"]
                     let childExistsInOriginal = originalArray?.indices.contains(index) ?? false
                     traverse(childValue, path: childPath, existsInOriginal: childExistsInOriginal)
                 }
@@ -286,7 +310,7 @@ final class JSONTreeViewModel {
                 // Traverse ONLY missing elements from original (lazy approach)
                 if let orig = originalArray, orig.count > array.count {
                     for index in array.count..<orig.count {
-                        traverseDeleted(orig[index], path: path + [String(index)])
+                        traverseDeleted(orig[index], path: path + ["[\(index)]"])
                     }
                 }
             }
@@ -379,6 +403,23 @@ final class JSONTreeViewModel {
         rebuildFlattenedNodes()
     }
 
+    /// Expand all parent nodes in the path to reveal the target field
+    /// - Parameter targetPath: Path array (e.g., ["features", "darkMode"])
+    func expandPathToNode(_ targetPath: [String]) {
+        guard !targetPath.isEmpty else { return }
+
+        // Build all parent paths that need expansion
+        // e.g., ["features", "darkMode"] -> expand "features"
+        for i in 1..<targetPath.count {
+            let parentPath = targetPath.prefix(i).joined(separator: ".")
+            expandedPaths.insert(parentPath)
+            manuallyCollapsed.remove(parentPath)  // Override manual collapse
+        }
+
+        // Rebuild tree to show newly expanded nodes
+        rebuildFlattenedNodes()
+    }
+
     /// Set the change filter state and rebuild the tree
     func setShowChangedFieldsOnly(_ enabled: Bool) {
         guard showChangedFieldsOnly != enabled else { return }
@@ -467,7 +508,12 @@ final class JSONTreeViewModel {
             let isExpanded = self.isExpanded(pathString) // Allow deleted nodes to expand to show children
             let isCurrentMatch = (currentMatchPath == path)
 
-            let node = FlattenedNode(
+            // Get schema information for this path
+            let schemaDescription = schema?.schema(at: path)?.description
+            let validationError = validationErrors[pathString]
+            let isRequired = parentPath.isEmpty ? false : (schema?.isRequired(key, at: parentPath) ?? false)
+
+            var node = FlattenedNode(
                 id: pathString,
                 key: key,
                 value: value,
@@ -479,6 +525,11 @@ final class JSONTreeViewModel {
                 isCurrentMatch: isCurrentMatch,
                 changeStatus: changeStatus
             )
+
+            // Add schema properties
+            node.schemaDescription = schemaDescription
+            node.validationError = validationError
+            node.isRequired = isRequired
 
             result.append(node)
 
@@ -510,7 +561,7 @@ final class JSONTreeViewModel {
 
         for index in 0..<totalCount {
             let key = "[\(index)]"
-            let path = parentPath + [String(index)]
+            let path = parentPath + ["[\(index)]"]
             let pathString = path.joined(separator: ".")
 
             // Skip node if filtering and not in visible set
@@ -541,7 +592,12 @@ final class JSONTreeViewModel {
             let isExpanded = self.isExpanded(pathString) // Allow deleted array elements to expand
             let isCurrentMatch = (currentMatchPath == path)
 
-            let node = FlattenedNode(
+            // Get schema information for array items
+            let itemSchema = schema?.schema(at: parentPath)?.items?.value
+            let schemaDescription = itemSchema?.description
+            let validationError = validationErrors[pathString]
+
+            var node = FlattenedNode(
                 id: pathString,
                 key: key,
                 value: value,
@@ -553,6 +609,11 @@ final class JSONTreeViewModel {
                 isCurrentMatch: isCurrentMatch,
                 changeStatus: changeStatus
             )
+
+            // Add schema properties
+            node.schemaDescription = schemaDescription
+            node.validationError = validationError
+            node.isRequired = false // Array elements are not "required" in the same way
 
             result.append(node)
 
@@ -602,7 +663,7 @@ final class JSONTreeViewModel {
         var paths = Set<String>()
 
         for (index, value) in array.enumerated() {
-            let path = parentPath + [String(index)]
+            let path = parentPath + ["[\(index)]"]
             let pathString = path.joined(separator: ".")
 
             if let childDict = value as? [String: Any] {
@@ -635,7 +696,11 @@ final class JSONTreeViewModel {
             if let dict = current as? [String: Any] {
                 guard let next = dict[component] else { return nil }
                 current = next
-            } else if let array = current as? [Any], let index = Int(component), index < array.count {
+            } else if let array = current as? [Any] {
+                // Strip brackets to handle both "[0]" and "0" formats
+                let stripped = component.replacingOccurrences(of: "[", with: "")
+                                        .replacingOccurrences(of: "]", with: "")
+                guard let index = Int(stripped), index < array.count else { return nil }
                 current = array[index]
             } else {
                 return nil

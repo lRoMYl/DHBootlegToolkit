@@ -217,14 +217,21 @@ extension S3CountryConfig {
         if var nested = json[key] as? [String: Any] {
             setValueInJSON(&nested, at: remainingPath, value: value)
             json[key] = nested
-        } else if var nestedArray = json[key] as? [Any], let index = Int(remainingPath[0]), index < nestedArray.count {
-            if remainingPath.count == 1 {
-                nestedArray[index] = value
-            } else if var nestedDict = nestedArray[index] as? [String: Any] {
-                setValueInJSON(&nestedDict, at: Array(remainingPath.dropFirst()), value: value)
-                nestedArray[index] = nestedDict
+        } else if var nestedArray = json[key] as? [Any] {
+            // Strip brackets from array index
+            let stripped = remainingPath[0]
+                .replacingOccurrences(of: "[", with: "")
+                .replacingOccurrences(of: "]", with: "")
+
+            if let index = Int(stripped), index < nestedArray.count {
+                if remainingPath.count == 1 {
+                    nestedArray[index] = value
+                } else if var nestedDict = nestedArray[index] as? [String: Any] {
+                    setValueInJSON(&nestedDict, at: Array(remainingPath.dropFirst()), value: value)
+                    nestedArray[index] = nestedDict
+                }
+                json[key] = nestedArray
             }
-            json[key] = nestedArray
         } else {
             // Parent path doesn't exist - create it (handles deleted fields in sparse JSON)
             #if DEBUG
@@ -333,12 +340,66 @@ extension S3CountryConfig {
                 var newNested: [String: Any] = [:]
                 insertValueAtPath(into: &newNested, from: sourceNested, path: remainingPath)
                 dest[key] = newNested
-            } else if path.count == 2 {
-                // Handle array index case (e.g., "items.0")
-                if let index = Int(remainingPath[0]),
-                   let sourceArray = source[key] as? [Any],
-                   index < sourceArray.count {
-                    dest[key] = [sourceArray[index]]
+            } else if let sourceArray = source[key] as? [Any] {
+                // Handle array elements (e.g., "items.[0]" or "items.[0].name")
+                // Strip brackets from array index
+                let stripped = remainingPath[0]
+                    .replacingOccurrences(of: "[", with: "")
+                    .replacingOccurrences(of: "]", with: "")
+
+                if let index = Int(stripped), index < sourceArray.count {
+                    if remainingPath.count == 1 {
+                        // Direct array element - copy entire element
+                        // For sparse arrays, we need to include all elements up to the edited index
+                        // Use original values from source array to maintain type consistency
+                        if var existingArray = dest[key] as? [Any] {
+                            // Ensure array is large enough
+                            while existingArray.count <= index {
+                                existingArray.append(sourceArray[existingArray.count])
+                            }
+                            existingArray[index] = sourceArray[index]
+                            dest[key] = existingArray
+                        } else {
+                            // First element - create array from source up to edited index
+                            var newArray: [Any] = []
+                            for i in 0...index {
+                                newArray.append(sourceArray[i])
+                            }
+                            dest[key] = newArray
+                        }
+                    } else if let sourceElement = sourceArray[index] as? [String: Any] {
+                        // Nested path within array element object
+                        // Recursively copy only the needed nested values
+                        var sparseElement: [String: Any] = [:]
+                        insertValueAtPath(
+                            into: &sparseElement,
+                            from: sourceElement,
+                            path: Array(remainingPath.dropFirst())
+                        )
+
+                        // Check if dest already has an array at this key
+                        if var existingArray = dest[key] as? [[String: Any]] {
+                            // Ensure array is large enough
+                            while existingArray.count <= index {
+                                existingArray.append([:])
+                            }
+                            // Merge with existing element if present
+                            if !existingArray[index].isEmpty {
+                                existingArray[index].merge(sparseElement) { _, new in new }
+                            } else {
+                                existingArray[index] = sparseElement
+                            }
+                            dest[key] = existingArray
+                        } else {
+                            // First element - create sparse array with correct index
+                            var newArray: [[String: Any]] = []
+                            for _ in 0..<index {
+                                newArray.append([:])
+                            }
+                            newArray.append(sparseElement)
+                            dest[key] = newArray
+                        }
+                    }
                 }
             }
         }
