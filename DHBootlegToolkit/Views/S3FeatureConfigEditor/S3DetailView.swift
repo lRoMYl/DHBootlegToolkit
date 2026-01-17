@@ -85,6 +85,26 @@ struct S3DetailView: View {
         VStack(spacing: 0) {
             S3DetailHeader(country: country, isReadOnly: isReadOnly)
 
+            // Deleted placeholder notice
+            if country.isDeletedPlaceholder {
+                HStack(spacing: 8) {
+                    Image(systemName: "trash.fill")
+                        .foregroundColor(.red)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("This config was deleted")
+                            .font(.headline)
+                        Text("Loading content from git...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding()
+                .background(Color.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal)
+                .padding(.top, 8)
+            }
+
             // Read-only banner for protected branches
             if store.isOnProtectedBranch {
                 HStack(spacing: 8) {
@@ -130,6 +150,9 @@ struct S3DetailView: View {
                             expandAllByDefault: true,
                             manuallyCollapsed: treeViewModel.getManuallyCollapsed(),
                             originalJSON: currentHeadJSON,
+                            fileGitStatus: country.gitStatus,
+                            hasInMemoryChanges: country.hasChanges,
+                            editedPaths: country.editedPaths,
                             showChangedFieldsOnly: showChangedFieldsOnly
                         )
                     }
@@ -321,6 +344,9 @@ struct S3DetailView: View {
                 json: json,
                 expandAllByDefault: true,
                 originalJSON: nil,
+                fileGitStatus: country.gitStatus,
+                hasInMemoryChanges: country.hasChanges,
+                editedPaths: country.editedPaths,
                 showChangedFieldsOnly: showChangedFieldsOnly
             )
 
@@ -336,6 +362,9 @@ struct S3DetailView: View {
                     expandAllByDefault: true,
                     manuallyCollapsed: treeViewModel.getManuallyCollapsed(),
                     originalJSON: headJSON,
+                    fileGitStatus: country.gitStatus,
+                    hasInMemoryChanges: country.hasChanges,
+                    editedPaths: country.editedPaths,
                     showChangedFieldsOnly: showChangedFieldsOnly
                 )
             }

@@ -29,7 +29,9 @@ struct S3FeatureConfigBrowserView: View {
                     get: { store.selectedCountry?.id },
                     set: { id in
                         if let id, let country = store.countries.first(where: { $0.id == id }) {
-                            store.selectCountry(country)
+                            Task {
+                                await store.selectCountry(country)
+                            }
                         }
                     }
                 )) {

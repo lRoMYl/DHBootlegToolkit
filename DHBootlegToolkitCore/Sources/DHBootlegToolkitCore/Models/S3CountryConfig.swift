@@ -25,6 +25,13 @@ public struct S3CountryConfig: Identifiable, Sendable, Equatable {
     /// Git status of this config file (A/M/D/unchanged)
     public var gitStatus: GitFileStatus
 
+    /// Whether this is a placeholder for a deleted config (not yet loaded from git)
+    public var isDeletedPlaceholder: Bool
+
+    /// Set of paths that have been edited in memory (dot-separated, e.g., "features.darkMode")
+    /// Used to track which fields were modified for hybrid badge computation
+    public var editedPaths: Set<String>
+
     /// Human-readable country name (from GEID mapping, fallback to hardcoded)
     public var countryName: String {
         if let mapping = GEIDRegistry.activeGEID(forCountryCode: countryCode) {
@@ -77,7 +84,9 @@ public struct S3CountryConfig: Identifiable, Sendable, Equatable {
         configData: Data? = nil,
         originalContent: String? = nil,
         hasChanges: Bool = false,
-        gitStatus: GitFileStatus = .unchanged
+        gitStatus: GitFileStatus = .unchanged,
+        isDeletedPlaceholder: Bool = false,
+        editedPaths: Set<String> = []
     ) {
         self.id = countryCode.lowercased()
         self.countryCode = countryCode.lowercased()
@@ -86,6 +95,8 @@ public struct S3CountryConfig: Identifiable, Sendable, Equatable {
         self.originalContent = originalContent
         self.hasChanges = hasChanges
         self.gitStatus = gitStatus
+        self.isDeletedPlaceholder = isDeletedPlaceholder
+        self.editedPaths = editedPaths
     }
 
     // MARK: - Country Names Mapping
@@ -118,7 +129,9 @@ public struct S3CountryConfig: Identifiable, Sendable, Equatable {
         lhs.configData == rhs.configData &&
         lhs.originalContent == rhs.originalContent &&
         lhs.hasChanges == rhs.hasChanges &&
-        lhs.gitStatus == rhs.gitStatus
+        lhs.gitStatus == rhs.gitStatus &&
+        lhs.isDeletedPlaceholder == rhs.isDeletedPlaceholder &&
+        lhs.editedPaths == rhs.editedPaths
     }
 }
 
@@ -165,6 +178,11 @@ extension S3CountryConfig {
             updated.configData = data
             updated.originalContent = updatedContent
             updated.hasChanges = true
+
+            // Track this path as edited
+            let pathString = path.joined(separator: ".")
+            updated.editedPaths.insert(pathString)
+
             return updated
         }
 
@@ -174,7 +192,14 @@ extension S3CountryConfig {
         #endif
         guard var json = parseConfigJSON() else { return nil }
         setValueInJSON(&json, at: path, value: value)
-        return withUpdatedJSON(json)
+
+        // Track path before calling withUpdatedJSON
+        if var updated = withUpdatedJSON(json) {
+            let pathString = path.joined(separator: ".")
+            updated.editedPaths.insert(pathString)
+            return updated
+        }
+        return nil
     }
 
     /// Helper to set a value in a nested JSON dictionary at the given path
@@ -236,5 +261,78 @@ extension S3CountryConfig {
         updated.originalContent = jsonString
         updated.hasChanges = true
         return updated
+    }
+
+    /// Constructs a sparse JSON containing only edited paths and their required parent structure.
+    /// Used when saving deleted files with partial edits to avoid restoring unedited fields.
+    /// - Parameters:
+    ///   - editedPaths: Set of dot-separated paths that were edited (e.g., "data.subscription.enabled")
+    /// - Returns: A new config with sparse JSON data, or nil if construction fails
+    public func withSparseJSON(editedPaths: Set<String>) -> S3CountryConfig? {
+        guard let fullJSON = parseConfigJSON() else { return nil }
+
+        // Construct sparse JSON with only edited paths
+        var sparseJSON: [String: Any] = [:]
+
+        for editedPath in editedPaths {
+            let pathComponents = editedPath.split(separator: ".").map(String.init)
+            insertValueAtPath(into: &sparseJSON, from: fullJSON, path: pathComponents)
+        }
+
+        // Serialize sparse JSON
+        guard let data = try? JSONSerialization.data(
+            withJSONObject: sparseJSON,
+            options: [.prettyPrinted, .sortedKeys]
+        ) else {
+            return nil
+        }
+
+        let jsonString = String(data: data, encoding: .utf8) ?? ""
+
+        var updated = self
+        updated.configData = data
+        updated.originalContent = jsonString
+        return updated
+    }
+
+    /// Helper to insert a value from source JSON into destination JSON at the given path
+    private func insertValueAtPath(
+        into dest: inout [String: Any],
+        from source: [String: Any],
+        path: [String]
+    ) {
+        guard !path.isEmpty else { return }
+
+        if path.count == 1 {
+            // Leaf node - copy value from source
+            dest[path[0]] = source[path[0]]
+            return
+        }
+
+        // Parent node - ensure parent exists and recurse
+        let key = path[0]
+        let remainingPath = Array(path.dropFirst())
+
+        if var nested = dest[key] as? [String: Any] {
+            // Parent already exists, recurse into it
+            if let sourceNested = source[key] as? [String: Any] {
+                insertValueAtPath(into: &nested, from: sourceNested, path: remainingPath)
+                dest[key] = nested
+            }
+        } else {
+            // Parent doesn't exist, create it
+            if let sourceNested = source[key] as? [String: Any] {
+                var newNested: [String: Any] = [:]
+                insertValueAtPath(into: &newNested, from: sourceNested, path: remainingPath)
+                dest[key] = newNested
+            } else if path.count == 2 {
+                // Handle array index case (e.g., "items.0")
+                if let index = Int(remainingPath[0]),
+                   let sourceArray = source[key] as? [Any],
+                   index < sourceArray.count {
+                    dest[key] = [sourceArray[index]]
+                }
+            }
+        }
     }
 }

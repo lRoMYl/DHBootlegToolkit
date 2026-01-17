@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import DHBootlegToolkitCore
 
 // MARK: - JSON Tree View Model
 
@@ -52,6 +53,12 @@ final class JSONTreeViewModel {
     /// Original JSON from git HEAD (for change tracking)
     private var originalJSON: [String: Any]?
 
+    /// Git status of the file itself (A/M/D/unchanged)
+    private var fileGitStatus: GitFileStatus? = nil
+
+    /// Set of paths that were explicitly edited by the user
+    private var editedPaths: Set<String> = []
+
     /// Change status for each path compared to git HEAD (only includes changed paths)
     private var pathChangeStatus: [String: JSONChangeStatus] = [:]
 
@@ -73,12 +80,18 @@ final class JSONTreeViewModel {
     ///   - expandAllByDefault: Whether to expand all nodes by default
     ///   - manuallyCollapsed: Set of paths that were manually collapsed by the user
     ///   - originalJSON: The original JSON from git HEAD for change tracking (nil = no diff)
+    ///   - fileGitStatus: The git status of the file itself (for applying file-level status to all fields)
+    ///   - hasInMemoryChanges: Whether the file has been edited in memory (affects how deleted/added files are handled)
+    ///   - editedPaths: Set of paths that were explicitly edited by the user (for hybrid badge computation)
     ///   - showChangedFieldsOnly: Whether to filter the tree to show only changed fields
     func configure(
         json: [String: Any],
         expandAllByDefault: Bool = true,
         manuallyCollapsed: Set<String> = [],
         originalJSON: [String: Any]? = nil,
+        fileGitStatus: GitFileStatus? = nil,
+        hasInMemoryChanges: Bool = false,
+        editedPaths: Set<String> = [],
         showChangedFieldsOnly: Bool = false
     ) {
         let startTime = CFAbsoluteTimeGetCurrent()
@@ -87,10 +100,21 @@ final class JSONTreeViewModel {
         self.expandAllByDefault = expandAllByDefault
         self.manuallyCollapsed = manuallyCollapsed
         self.originalJSON = originalJSON
+        self.fileGitStatus = fileGitStatus
+        self.editedPaths = editedPaths
         self.showChangedFieldsOnly = showChangedFieldsOnly
 
-        // Compute change status against original JSON
-        if let original = originalJSON {
+        // Compute change status with hybrid approach
+        if let fileStatus = fileGitStatus, (fileStatus == .deleted || fileStatus == .added) {
+            // Hybrid mode: combine file-wide status with per-field diff for edited paths
+            pathChangeStatus = computeHybridChangeStatus(
+                json: json,
+                fileStatus: fileStatus,
+                originalJSON: originalJSON,
+                editedPaths: editedPaths
+            )
+        } else if let original = originalJSON {
+            // Standard per-field diff for modified/unchanged files
             pathChangeStatus = JSONDiffUtility.computeChanges(current: json, original: original)
         } else {
             pathChangeStatus = [:]
@@ -142,9 +166,94 @@ final class JSONTreeViewModel {
         currentMatchPath = nil
         flattenedNodes = []
         originalJSON = nil
+        fileGitStatus = nil
+        editedPaths = []
         pathChangeStatus = [:]
         showChangedFieldsOnly = false
         cachedVisiblePaths = nil
+    }
+
+    /// Computes change status for all paths when the entire file has a git status
+    /// Used when file is deleted or added - all fields get the same status
+    private func computeFileWideChangeStatus(json: [String: Any], status: GitFileStatus) -> [String: JSONChangeStatus] {
+        var result: [String: JSONChangeStatus] = [:]
+        let changeStatus: JSONChangeStatus = status == .deleted ? .deleted : .added
+
+        func traverse(_ value: Any, path: [String]) {
+            let pathString = path.joined(separator: ".")
+            result[pathString] = changeStatus
+
+            if let dict = value as? [String: Any] {
+                for (key, childValue) in dict {
+                    traverse(childValue, path: path + [key])
+                }
+            } else if let array = value as? [Any] {
+                for (index, childValue) in array.enumerated() {
+                    traverse(childValue, path: path + [String(index)])
+                }
+            }
+        }
+
+        // Traverse all top-level keys
+        for (key, value) in json {
+            traverse(value, path: [key])
+        }
+
+        return result
+    }
+
+    /// Computes hybrid change status for deleted/added files with some edited fields
+    /// - Edited paths: Compare with git HEAD (per-field diff)
+    /// - Unedited paths: Show file status ([D] or [A])
+    private func computeHybridChangeStatus(
+        json: [String: Any],
+        fileStatus: GitFileStatus,
+        originalJSON: [String: Any]?,
+        editedPaths: Set<String>
+    ) -> [String: JSONChangeStatus] {
+        var result: [String: JSONChangeStatus] = [:]
+
+        // Default status for unedited fields
+        let fileChangeStatus: JSONChangeStatus = fileStatus == .deleted ? .deleted : .added
+
+        // Compute per-field diff if we have original JSON
+        let diffStatuses = originalJSON != nil ?
+            JSONDiffUtility.computeChanges(current: json, original: originalJSON!) : [:]
+
+        func traverse(_ value: Any, path: [String]) {
+            let pathString = path.joined(separator: ".")
+
+            // Check if this path or any parent path was edited
+            let wasEdited = editedPaths.contains { editedPath in
+                pathString == editedPath || pathString.hasPrefix(editedPath + ".")
+            }
+
+            if wasEdited {
+                // Use per-field diff status for edited paths
+                result[pathString] = diffStatuses[pathString] ?? .unchanged
+            } else {
+                // Use file status for unedited paths
+                result[pathString] = fileChangeStatus
+            }
+
+            // Recurse into children
+            if let dict = value as? [String: Any] {
+                for (key, childValue) in dict {
+                    traverse(childValue, path: path + [key])
+                }
+            } else if let array = value as? [Any] {
+                for (index, childValue) in array.enumerated() {
+                    traverse(childValue, path: path + [String(index)])
+                }
+            }
+        }
+
+        // Traverse all top-level keys
+        for (key, value) in json {
+            traverse(value, path: [key])
+        }
+
+        return result
     }
 
     // MARK: - Expansion Control

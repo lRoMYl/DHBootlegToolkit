@@ -76,10 +76,8 @@ struct JSONNodeRowView: View {
         .opacity(node.isDeleted ? 0.7 : 1.0)
         .contentShape(Rectangle())
         .onTapGesture {
-            // Single tap selects the node (but not for deleted nodes)
-            if !node.isDeleted {
-                onSelect?(node.path, node.value)
-            }
+            // Single tap selects the node
+            onSelect?(node.path, node.value)
         }
         .contextMenu {
             // Hide context menu entirely in read-only mode or for deleted nodes
@@ -174,8 +172,8 @@ struct JSONNodeRowView: View {
 
     @ViewBuilder
     private var valueView: some View {
-        // Deleted nodes always show in read-only mode
-        let showReadOnly = isReadOnly || node.isDeleted
+        // Read-only when global read-only is set (protected branches)
+        let showReadOnly = isReadOnly
 
         switch node.nodeType {
         case .object, .array:

@@ -206,6 +206,12 @@ final class S3Store {
             // Map file paths to country IDs and update gitStatus
             for index in countries.indices {
                 let country = countries[index]
+
+                // Skip deleted placeholders - already marked correctly
+                if country.isDeletedPlaceholder {
+                    continue
+                }
+
                 // Config file path pattern: envRelativePath/countryCode/config.json
                 let configPath = "\(envRelativePath)/\(country.countryCode)/config.json"
 
@@ -244,6 +250,46 @@ final class S3Store {
         }
 
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    /// Loads a deleted country's config from git HEAD.
+    /// Called when user selects a deleted country placeholder.
+    func loadDeletedCountryContent(countryCode: String) async -> S3CountryConfig? {
+        guard let gitWorker = gitWorker,
+              let repoURL = s3RepositoryURL,
+              let envURL = currentEnvironmentURL else {
+            return nil
+        }
+
+        // Build relative path: envRelativePath/countryCode/config.json
+        let envRelativePath = envURL.path.replacingOccurrences(of: repoURL.path + "/", with: "")
+        let relativePath = "\(envRelativePath)/\(countryCode.lowercased())/config.json"
+
+        // Fetch content from git HEAD
+        guard let data = await gitWorker.getHeadFileContent(relativePath: relativePath) else {
+            return nil  // File doesn't exist in git HEAD
+        }
+
+        // Verify it's valid JSON
+        guard let _ = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+
+        let configFileURL = envURL
+            .appendingPathComponent(countryCode.lowercased())
+            .appendingPathComponent("config.json")
+
+        let originalContent = String(data: data, encoding: .utf8)
+
+        return S3CountryConfig(
+            countryCode: countryCode.lowercased(),
+            configURL: configFileURL,
+            configData: data,
+            originalContent: originalContent,
+            hasChanges: false,
+            gitStatus: .deleted,
+            isDeletedPlaceholder: false  // Now loaded
+        )
     }
 
     // MARK: - Field Selection State (for Batch Update)
@@ -486,10 +532,67 @@ final class S3Store {
                     configURL: configFileURL,
                     configData: configData,
                     originalContent: originalContent,
-                    hasChanges: modifiedCountryIds.contains(countryCode.lowercased())
+                    hasChanges: modifiedCountryIds.contains(countryCode.lowercased()),
+                    gitStatus: .unchanged,
+                    isDeletedPlaceholder: false,
+                    editedPaths: []
                 )
 
                 loadedCountries.append(config)
+            }
+
+            // PART 2: Discover deleted countries from git
+            if let gitWorker = gitWorker,
+               let repoURL = s3RepositoryURL {
+
+                let envRelativePath = envURL.path.replacingOccurrences(of: repoURL.path + "/", with: "")
+
+                do {
+                    // Get all deleted files in this environment directory
+                    let deletedPaths = try await gitWorker.getDeletedFiles(inDirectory: envRelativePath)
+
+                    // Filter for config.json files and extract country codes
+                    for deletedPath in deletedPaths {
+                        guard deletedPath.hasSuffix("/config.json") else { continue }
+
+                        // Extract country code (parent directory of config.json)
+                        let pathComponents = deletedPath.split(separator: "/")
+                        guard pathComponents.count >= 2,
+                              pathComponents.last == "config.json" else {
+                            continue
+                        }
+
+                        let countryCode = String(pathComponents[pathComponents.count - 2])
+
+                        // Skip if country already exists on disk
+                        if loadedCountries.contains(where: { $0.countryCode == countryCode.lowercased() }) {
+                            continue
+                        }
+
+                        // Create placeholder for deleted country
+                        let configFileURL = envURL
+                            .appendingPathComponent(countryCode.lowercased())
+                            .appendingPathComponent("config.json")
+
+                        let placeholderConfig = S3CountryConfig(
+                            countryCode: countryCode.lowercased(),
+                            configURL: configFileURL,
+                            configData: nil,  // Not loaded yet
+                            originalContent: nil,
+                            hasChanges: false,
+                            gitStatus: .deleted,
+                            isDeletedPlaceholder: true,
+                            editedPaths: []
+                        )
+
+                        loadedCountries.append(placeholderConfig)
+                    }
+                } catch {
+                    // Git errors are non-fatal
+                    #if DEBUG
+                    print("[S3Store] Failed to load deleted countries: \(error)")
+                    #endif
+                }
             }
 
             // Sort by country code
@@ -508,9 +611,26 @@ final class S3Store {
     }
 
     /// Selects a country for editing
-    func selectCountry(_ country: S3CountryConfig) {
-        selectedCountry = country
-        // Clear field selection when switching countries
+    func selectCountry(_ country: S3CountryConfig) async {
+        // If deleted placeholder, load content from git HEAD
+        if country.isDeletedPlaceholder {
+            guard let loadedCountry = await loadDeletedCountryContent(countryCode: country.countryCode) else {
+                errorMessage = "Could not load deleted config for \(country.countryCode.uppercased()) from git"
+                selectedCountry = country
+                clearNodeSelection()
+                return
+            }
+
+            // Replace placeholder with loaded version
+            if let index = countries.firstIndex(where: { $0.id == country.id }) {
+                countries[index] = loadedCountry
+            }
+
+            selectedCountry = loadedCountry
+        } else {
+            selectedCountry = country
+        }
+
         clearNodeSelection()
     }
 
@@ -605,11 +725,15 @@ final class S3Store {
         }
 
         if let updated = country.withUpdatedJSON(json) {
-            selectedCountry = updated
-            modifiedCountryIds.insert(updated.id)
+            var mutableUpdated = updated
+            let newFieldPath = (parentPath + [key]).joined(separator: ".")
+            mutableUpdated.editedPaths.insert(newFieldPath)
 
-            if let index = countries.firstIndex(where: { $0.id == updated.id }) {
-                countries[index] = updated
+            selectedCountry = mutableUpdated
+            modifiedCountryIds.insert(mutableUpdated.id)
+
+            if let index = countries.firstIndex(where: { $0.id == mutableUpdated.id }) {
+                countries[index] = mutableUpdated
             }
         }
     }
@@ -657,11 +781,15 @@ final class S3Store {
         }
 
         if let updated = country.withUpdatedJSON(json) {
-            selectedCountry = updated
-            modifiedCountryIds.insert(updated.id)
+            var mutableUpdated = updated
+            let deletedPath = path.joined(separator: ".")
+            mutableUpdated.editedPaths.insert(deletedPath)
 
-            if let index = countries.firstIndex(where: { $0.id == updated.id }) {
-                countries[index] = updated
+            selectedCountry = mutableUpdated
+            modifiedCountryIds.insert(mutableUpdated.id)
+
+            if let index = countries.firstIndex(where: { $0.id == mutableUpdated.id }) {
+                countries[index] = mutableUpdated
             }
         }
     }
@@ -917,16 +1045,18 @@ final class S3Store {
 
     /// Saves all modified countries
     func saveAllChanges() async throws {
+        let fileManager = FileManager.default
+
         for countryId in modifiedCountryIds {
             guard let country = countries.first(where: { $0.id == countryId }),
                   let data = country.configData else {
                 continue
             }
 
-            // Check if file still exists (parent directory must exist for atomic write)
+            // For deleted files, recreate parent directory
             let parentDir = country.configURL.deletingLastPathComponent()
-            guard FileManager.default.fileExists(atPath: parentDir.path) else {
-                throw S3StoreError.fileDeleted(country.countryCode)
+            if !fileManager.fileExists(atPath: parentDir.path) {
+                try fileManager.createDirectory(at: parentDir, withIntermediateDirectories: true)
             }
 
             try data.write(to: country.configURL, options: .atomic)
@@ -937,12 +1067,16 @@ final class S3Store {
         for index in countries.indices {
             // After save, update originalContent to match the saved data for future key order preservation
             let newOriginalContent = countries[index].configData.flatMap { String(data: $0, encoding: .utf8) }
+            let newGitStatus: GitFileStatus = countries[index].gitStatus == .deleted ? .added : countries[index].gitStatus
             countries[index] = S3CountryConfig(
                 countryCode: countries[index].countryCode,
                 configURL: countries[index].configURL,
                 configData: countries[index].configData,
                 originalContent: newOriginalContent,
-                hasChanges: false
+                hasChanges: false,
+                gitStatus: newGitStatus,
+                isDeletedPlaceholder: false,
+                editedPaths: []
             )
         }
 
@@ -957,28 +1091,59 @@ final class S3Store {
 
     /// Saves a specific country's config
     func saveCountry(_ country: S3CountryConfig) async throws {
-        guard let data = country.configData else {
+        guard let originalData = country.configData else {
             throw S3StoreError.noDataToSave
         }
 
-        // Check if file still exists (parent directory must exist for atomic write)
-        let parentDir = country.configURL.deletingLastPathComponent()
-        guard FileManager.default.fileExists(atPath: parentDir.path) else {
-            throw S3StoreError.fileDeleted(country.countryCode)
+        // Determine what data to write
+        let dataToWrite: Data
+
+        // For deleted files with partial edits, construct sparse JSON
+        if country.gitStatus == .deleted && !country.editedPaths.isEmpty {
+            // Build sparse JSON containing only edited fields
+            if let sparseCountry = country.withSparseJSON(editedPaths: country.editedPaths),
+               let sparseData = sparseCountry.configData {
+                dataToWrite = sparseData
+                #if DEBUG
+                print("[S3Store] Saving deleted country with sparse JSON (\(country.editedPaths.count) edited fields)")
+                #endif
+            } else {
+                // Fallback to full JSON if sparse construction fails
+                dataToWrite = originalData
+                #if DEBUG
+                print("[S3Store] WARNING: Sparse JSON construction failed, using full JSON")
+                #endif
+            }
+        } else {
+            // Normal save: write full JSON
+            dataToWrite = originalData
         }
 
-        try data.write(to: country.configURL, options: .atomic)
+        // For deleted files, recreate parent directory
+        let parentDir = country.configURL.deletingLastPathComponent()
+        let fileManager = FileManager.default
 
-        // Update state - update originalContent to match saved data for future key order preservation
+        if !fileManager.fileExists(atPath: parentDir.path) {
+            try fileManager.createDirectory(at: parentDir, withIntermediateDirectories: true)
+        }
+
+        // Write the config file
+        try dataToWrite.write(to: country.configURL, options: .atomic)
+
+        // Update state - use dataToWrite as new configData
         modifiedCountryIds.remove(country.id)
         if let index = countries.firstIndex(where: { $0.id == country.id }) {
-            let newOriginalContent = country.configData.flatMap { String(data: $0, encoding: .utf8) }
+            let newOriginalContent = String(data: dataToWrite, encoding: .utf8)
+            let newGitStatus: GitFileStatus = country.gitStatus == .deleted ? .added : country.gitStatus
             countries[index] = S3CountryConfig(
                 countryCode: country.countryCode,
                 configURL: country.configURL,
-                configData: country.configData,
+                configData: dataToWrite,  // Use sparse data
                 originalContent: newOriginalContent,
-                hasChanges: false
+                hasChanges: false,
+                gitStatus: newGitStatus,
+                isDeletedPlaceholder: false,
+                editedPaths: []
             )
         }
 
@@ -1179,7 +1344,12 @@ final class S3Store {
         // Try git restore if available (restores file on disk from HEAD)
         if hasGitChanges, let gitWorker, let relativePath = getRelativePath(for: configURL) {
             do {
-                try await gitWorker.restoreFile(relativePath: relativePath)
+                // Use special restore for deleted files
+                if country.gitStatus == .deleted {
+                    try await gitWorker.restoreDeletedFile(relativePath: relativePath)
+                } else {
+                    try await gitWorker.restoreFile(relativePath: relativePath)
+                }
             } catch {
                 // If git restore fails, log but continue to reload what's on disk
                 print("Failed to restore file from git: \(error.localizedDescription)")
@@ -1195,7 +1365,10 @@ final class S3Store {
             configURL: configURL,
             configData: configData,
             originalContent: originalContent,
-            hasChanges: false
+            hasChanges: false,
+            gitStatus: country.gitStatus,
+            isDeletedPlaceholder: false,
+            editedPaths: []
         )
 
         // Remove from modified set if it was there
