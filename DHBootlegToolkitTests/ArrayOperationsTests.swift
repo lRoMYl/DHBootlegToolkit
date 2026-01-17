@@ -30,7 +30,7 @@ struct ArrayElementPropertiesTests {
 
     @Test("Node in array - is array element")
     func nodeInArrayIsArrayElement() {
-        let node = makeNode(path: ["tags", "0"], nodeType: .string, parentType: .array)
+        let node = makeNode(path: ["tags", "[0]"], nodeType: .string, parentType: .array)
         #expect(node.isArrayElement == true)
     }
 
@@ -50,7 +50,7 @@ struct ArrayElementPropertiesTests {
 
     @Test("Node in array - can insert element")
     func nodeInArrayCanInsertElement() {
-        let node = makeNode(path: ["tags", "0"], nodeType: .string, parentType: .array)
+        let node = makeNode(path: ["tags", "[0]"], nodeType: .string, parentType: .array)
         #expect(node.canInsertArrayElement == true)
     }
 
@@ -70,7 +70,7 @@ struct ArrayElementPropertiesTests {
 
     @Test("Node in array - can delete element")
     func nodeInArrayCanDeleteElement() {
-        let node = makeNode(path: ["tags", "0"], nodeType: .string, parentType: .array)
+        let node = makeNode(path: ["tags", "[0]"], nodeType: .string, parentType: .array)
         #expect(node.canDeleteArrayElement == true)
     }
 
@@ -90,13 +90,13 @@ struct ArrayElementPropertiesTests {
 
     @Test("Array element at index 0 - returns 0")
     func arrayElementAtIndex0() {
-        let node = makeNode(path: ["tags", "0"], nodeType: .string, parentType: .array)
+        let node = makeNode(path: ["tags", "[0]"], nodeType: .string, parentType: .array)
         #expect(node.arrayIndex == 0)
     }
 
     @Test("Array element at index 5 - returns 5")
     func arrayElementAtIndex5() {
-        let node = makeNode(path: ["items", "5"], nodeType: .object(keyCount: 0), parentType: .array)
+        let node = makeNode(path: ["items", "[5]"], nodeType: .object(keyCount: 0), parentType: .array)
         #expect(node.arrayIndex == 5)
     }
 
@@ -108,7 +108,7 @@ struct ArrayElementPropertiesTests {
 
     @Test("Nested array element - returns correct index")
     func nestedArrayElementIndex() {
-        let node = makeNode(path: ["data", "items", "3"], nodeType: .int, parentType: .array)
+        let node = makeNode(path: ["data", "items", "[3]"], nodeType: .int, parentType: .array)
         #expect(node.arrayIndex == 3)
     }
 
@@ -116,13 +116,13 @@ struct ArrayElementPropertiesTests {
 
     @Test("Array element - returns parent array path")
     func arrayElementParentPath() {
-        let node = makeNode(path: ["tags", "2"], nodeType: .string, parentType: .array)
+        let node = makeNode(path: ["tags", "[2]"], nodeType: .string, parentType: .array)
         #expect(node.arrayParentPath == ["tags"])
     }
 
     @Test("Nested array element - returns parent array path")
     func nestedArrayElementParentPath() {
-        let node = makeNode(path: ["data", "items", "1"], nodeType: .object(keyCount: 0), parentType: .array)
+        let node = makeNode(path: ["data", "items", "[1]"], nodeType: .object(keyCount: 0), parentType: .array)
         #expect(node.arrayParentPath == ["data", "items"])
     }
 
@@ -140,10 +140,10 @@ struct ArrayElementContextMenuTests {
 
     private func makeArrayElement(nodeType: JSONNodeType, index: Int) -> FlattenedNode {
         FlattenedNode(
-            id: "array.\(index)",
-            key: "\(index)",
+            id: "array.[\(index)]",
+            key: "[\(index)]",
             value: "",
-            path: ["array", "\(index)"],
+            path: ["array", "[\(index)]"],
             depth: 1,
             nodeType: nodeType,
             parentType: .array,

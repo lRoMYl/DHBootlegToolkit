@@ -74,7 +74,7 @@ enum JSONDiffUtility {
             let originalArray = originalValue as? [Any]
 
             for (index, value) in currentArray.enumerated() {
-                let childPath = path + [String(index)]
+                let childPath = path + ["[\(index)]"]
                 let originalChild: Any?
                 if let origArray = originalArray, index < origArray.count {
                     originalChild = origArray[index]
@@ -93,7 +93,7 @@ enum JSONDiffUtility {
             // Check for deleted array elements (indices that existed in original but not in current)
             if let originalArray = originalArray, originalArray.count > currentArray.count {
                 for index in currentArray.count..<originalArray.count {
-                    let childPath = path + [String(index)]
+                    let childPath = path + ["[\(index)]"]
                     let deletedPathString = childPath.joined(separator: ".")
                     changes[deletedPathString] = .deleted
 
@@ -132,7 +132,7 @@ enum JSONDiffUtility {
             }
         } else if let array = value as? [Any] {
             for (index, childValue) in array.enumerated() {
-                let childPath = path + [String(index)]
+                let childPath = path + ["[\(index)]"]
                 let childPathString = childPath.joined(separator: ".")
                 changes[childPathString] = .deleted
                 markAllDeleted(childValue, path: childPath, changes: &changes)

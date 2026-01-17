@@ -344,7 +344,7 @@ struct JSONArrayView: View {
                 JSONNodeView(
                     key: "[\(index)]",
                     value: array[index],
-                    path: path + [String(index)],
+                    path: path + ["[\(index)]"],
                     currentMatchPath: currentMatchPath,
                     expandedPaths: expandedPaths,
                     expandAllByDefault: expandAllByDefault,

@@ -117,6 +117,12 @@ final class S3Store {
     /// JSON schema data for validation (if available)
     var schemaData: Data?
 
+    /// Parsed JSON Schema
+    var parsedSchema: JSONSchema?
+
+    /// Validation results keyed by country code
+    var validationResults: [String: JSONSchemaValidationResult] = [:]
+
     // MARK: - Git Integration
 
     /// Git worker for repository operations (git restore for discard)
@@ -381,9 +387,20 @@ final class S3Store {
             await ctx.time("Load schema") {
                 let schemaURL = configURL.appendingPathComponent("_schema")
                 if fileManager.fileExists(atPath: schemaURL.path) {
-                    let schemaFileURL = schemaURL.appendingPathComponent("schema.json")
+                    let schemaFileURL = schemaURL.appendingPathComponent("config.json")
                     if fileManager.fileExists(atPath: schemaFileURL.path) {
-                        schemaData = try? Data(contentsOf: schemaFileURL)
+                        if let data = try? Data(contentsOf: schemaFileURL) {
+                            schemaData = data
+                            // Parse schema
+                            let parser = JSONSchemaParser()
+                            do {
+                                parsedSchema = try parser.parse(data: data)
+                                AppLogger.shared.info("Schema loaded successfully: Draft-07")
+                            } catch {
+                                AppLogger.shared.error("Failed to parse schema: \(error.localizedDescription)")
+                                parsedSchema = nil
+                            }
+                        }
                     }
                 }
             }
@@ -686,21 +703,28 @@ final class S3Store {
     }
 
     /// Gets a value from a nested JSON dictionary at the given path
+    /// Supports both dictionary keys and array indices
     func getValue(at path: [String], from json: [String: Any]) -> Any? {
         guard !path.isEmpty else { return json }
 
-        if path.count == 1 {
-            return json[path[0]]
+        var current: Any = json
+
+        for component in path {
+            if let dict = current as? [String: Any] {
+                guard let next = dict[component] else { return nil }
+                current = next
+            } else if let array = current as? [Any] {
+                // Strip brackets to handle both "[0]" and "0" formats
+                let stripped = component.replacingOccurrences(of: "[", with: "")
+                                        .replacingOccurrences(of: "]", with: "")
+                guard let index = Int(stripped), index < array.count else { return nil }
+                current = array[index]
+            } else {
+                return nil
+            }
         }
 
-        let key = path[0]
-        let remainingPath = Array(path.dropFirst())
-
-        if let nested = json[key] as? [String: Any] {
-            return getValue(at: remainingPath, from: nested)
-        }
-
-        return nil
+        return current
     }
 
     /// Adds a new field at the specified path
@@ -829,8 +853,14 @@ final class S3Store {
         guard path.count >= 2,
               let country = selectedCountry,
               var json = country.parseConfigJSON(),
-              let indexString = path.last,
-              let index = Int(indexString) else {
+              let indexString = path.last else {
+            return
+        }
+
+        // Strip brackets to handle both "[0]" and "0" formats
+        let stripped = indexString.replacingOccurrences(of: "[", with: "")
+                                  .replacingOccurrences(of: "]", with: "")
+        guard let index = Int(stripped) else {
             return
         }
 
@@ -902,8 +932,14 @@ final class S3Store {
         guard path.count >= 2,
               let country = selectedCountry,
               var json = country.parseConfigJSON(),
-              let indexString = path.last,
-              let index = Int(indexString) else {
+              let indexString = path.last else {
+            return
+        }
+
+        // Strip brackets to handle both "[0]" and "0" formats
+        let stripped = indexString.replacingOccurrences(of: "[", with: "")
+                                  .replacingOccurrences(of: "]", with: "")
+        guard let index = Int(stripped) else {
             return
         }
 
@@ -1476,6 +1512,93 @@ extension S3Store: GitPublishable {
         // Clear selection if it was modified
         if let selectedCountry, selectedCountry.gitStatus != .unchanged {
             self.selectedCountry = nil
+        }
+    }
+
+    // MARK: - Schema Validation
+
+    /// Validates a country configuration against the schema
+    /// - Parameter country: The country configuration to validate
+    /// - Returns: Validation result containing any errors or warnings
+    func validateCountry(_ country: S3CountryConfig) async -> JSONSchemaValidationResult {
+        guard let schema = parsedSchema else {
+            // No schema available, return success
+            return .success
+        }
+
+        // Convert country data to JSON dictionary for validation
+        guard let jsonData = country.configData else {
+            return .failure(path: [], message: "No data available for validation")
+        }
+
+        do {
+            let jsonObject = try JSONSerialization.jsonObject(with: jsonData)
+            let validator = JSONSchemaValidator(schema: schema)
+            return validator.validate(jsonObject, schema: schema, path: [])
+        } catch {
+            return .failure(path: [], message: "Invalid JSON data: \(error.localizedDescription)")
+        }
+    }
+
+    /// Checks if a country configuration is valid for saving
+    /// - Parameter country: The country configuration to check
+    /// - Returns: true if validation passes (no errors), false otherwise
+    func isValidForSave(_ country: S3CountryConfig) -> Bool {
+        guard let result = validationResults[country.countryCode] else {
+            return true // No validation result means no schema, allow save
+        }
+        return result.isValid
+    }
+
+    /// Validates the selected country and stores the result
+    func validateSelectedCountry() async {
+        guard let country = selectedCountry else { return }
+
+        let result = await validateCountry(country)
+        validationResults[country.countryCode] = result
+
+        if !result.errors.isEmpty {
+            AppLogger.shared.info("Validation found \(result.errorCount) errors and \(result.warningCount) warnings for \(country.countryCode)")
+        }
+    }
+
+    /// Clears validation results (useful when schema changes or countries reload)
+    func clearValidationResults() {
+        validationResults.removeAll()
+    }
+
+    /// Navigate to a validation error by expanding parents, selecting, and scrolling
+    /// - Parameters:
+    ///   - error: The validation error to navigate to
+    ///   - treeViewModel: Tree view model to expand nodes
+    ///   - scrollProxy: Scroll view proxy to scroll to the error
+    func navigateToValidationError(
+        _ error: ValidationError,
+        treeViewModel: JSONTreeViewModel,
+        scrollProxy: ScrollViewProxy
+    ) {
+        // 1. Expand parent nodes
+        treeViewModel.expandPathToNode(error.path)
+
+        // 2. Get value at error path for selection
+        guard let country = selectedCountry,
+              let json = country.parseConfigJSON() else { return }
+
+        let value = getValue(at: error.path, from: json)
+
+        // 3. Select the node
+        if let value = value {
+            selectNode(path: error.path, value: value)
+        }
+
+        // 4. Scroll to the node with animation
+        // Small delay ensures tree has rebuilt after expansion
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(50))
+
+            withAnimation(.easeInOut(duration: 0.3)) {
+                scrollProxy.scrollTo(error.pathString, anchor: .center)
+            }
         }
     }
 }

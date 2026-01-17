@@ -54,6 +54,30 @@ struct JSONNodeRowView: View {
             // Type badge
             NodeTypeBadge(nodeType: node.nodeType)
 
+            // Schema description tooltip
+            if let description = node.schemaDescription {
+                Image(systemName: "info.circle")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+                    .help(description)
+            }
+
+            // Validation error badge
+            if let error = node.validationError {
+                Image(systemName: error.severity == .error ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .foregroundStyle(error.severity == .error ? .red : .orange)
+                    .font(.caption)
+                    .help(error.message)
+            }
+
+            // Required field indicator
+            if node.isRequired {
+                Text("*")
+                    .foregroundStyle(.red)
+                    .font(.caption)
+                    .help("Required field")
+            }
+
             // Change status badge (for leaf nodes with changes, or any deleted node)
             if let status = node.changeStatus, node.isLeafNode || status == .deleted {
                 switch status {
@@ -139,8 +163,13 @@ struct JSONNodeRowView: View {
             guard droppedPath.count >= 2 else { return false }
 
             let sourceArrayPath = Array(droppedPath.dropLast())
-            guard let sourceIndexStr = droppedPath.last,
-                  let sourceIndex = Int(sourceIndexStr),
+            guard let sourceIndexStr = droppedPath.last else {
+                return false
+            }
+            // Strip brackets to handle both "[0]" and "0" formats
+            let stripped = sourceIndexStr.replacingOccurrences(of: "[", with: "")
+                                         .replacingOccurrences(of: "]", with: "")
+            guard let sourceIndex = Int(stripped),
                   sourceArrayPath == targetArrayPath, // Only allow reordering within same array
                   sourceIndex != targetIndex else {
                 return false

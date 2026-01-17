@@ -1,4 +1,5 @@
 import SwiftUI
+import DHBootlegToolkitCore
 
 // MARK: - JSON Change Status
 
@@ -153,6 +154,17 @@ struct FlattenedNode: Identifiable {
     /// Change status compared to git HEAD (nil = unchanged)
     var changeStatus: JSONChangeStatus?
 
+    // MARK: - Schema Properties
+
+    /// Field description from JSON Schema
+    var schemaDescription: String?
+
+    /// Validation error for this field (nil if no error)
+    var validationError: ValidationError?
+
+    /// Whether this field is required by the schema
+    var isRequired: Bool = false
+
     // MARK: - Computed Properties
 
     /// Whether this is a leaf node (not expandable)
@@ -250,7 +262,10 @@ struct FlattenedNode: Identifiable {
     /// Get the array index if this is an array element
     var arrayIndex: Int? {
         guard parentType == .array, let lastComponent = path.last else { return nil }
-        return Int(lastComponent)
+        // Strip brackets to handle both "[0]" and "0" formats
+        let stripped = lastComponent.replacingOccurrences(of: "[", with: "")
+                                    .replacingOccurrences(of: "]", with: "")
+        return Int(stripped)
     }
 
     /// Get the parent array path (path without the index)

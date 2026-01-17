@@ -35,6 +35,34 @@ struct S3FeatureConfigBrowserView: View {
                         }
                     }
                 )) {
+                    // Schema validation section
+                    Section {
+                        if store.parsedSchema != nil {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                                Text("Schema Loaded")
+                                    .font(.subheadline)
+                                Spacer()
+                                Text("Draft-07")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else {
+                            HStack {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                                Text("No Schema Found")
+                                    .font(.subheadline)
+                            }
+                        }
+                    } header: {
+                        Text("Validation")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .textCase(nil)
+                    }
+
                     // Environment section (header-only with toggle)
                     Section {
                         EmptyView()
