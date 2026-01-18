@@ -6,6 +6,18 @@
         <description>Most recent updates to DHBootlegToolkit</description>
         <language>en</language>
         <item>
+            <title>0.0.6</title>
+            <pubDate>Sun, 18 Jan 2026 10:37:13 +0000</pubDate>
+            <link>https://github.com/lRoMYl/DHBootlegToolkit</link>
+            <sparkle:version>17</sparkle:version>
+            <sparkle:shortVersionString>0.0.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://raw.githubusercontent.com/lRoMYl/DHBootlegToolkit/master/DHBootlegToolkit-0.0.6.zip" length="15305718" type="application/octet-stream" sparkle:edSignature="u1JixFbKLy622I1x0Ct9pBS9RqUcGVxPHgKggAC0J2oTuY8OTEMFfQ9fqKiXfB1uVSpQu9iqN3NJVOOcw2YmAg=="/>
+            <sparkle:deltas>
+                <enclosure url="https://raw.githubusercontent.com/lRoMYl/DHBootlegToolkit/master/DHBootlegToolkit17-16.delta" sparkle:deltaFrom="16" length="2678" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="860336" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="6lsiVre/YYWSoAVYBIzBpWfLgMMrEolynYrmoFFNqk0YNNfyMBX7qZGdHx9ltq0R0DnopA8CCL9zjvnX8r7sDw=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>0.0.5-fix-2</title>
             <pubDate>Sun, 18 Jan 2026 10:21:00 +0000</pubDate>
             <link>https://github.com/lRoMYl/DHBootlegToolkit</link>
