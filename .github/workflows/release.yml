@@ -144,9 +144,82 @@ jobs:
             echo "✅ Version synced to repository"
           fi
 
+  update-appcast:
+    name: Update Appcast Feed
+    needs: build
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Download Sparkle tools
+        run: |
+          SPARKLE_VERSION="2.8.1"
+          curl -L -o sparkle.tar.xz "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+          tar -xf sparkle.tar.xz
+          chmod +x bin/generate_appcast
+          echo "✅ Downloaded Sparkle tools"
+
+      - name: Prepare archives directory
+        run: |
+          mkdir -p archives
+
+          # Download current release zip
+          VERSION="${{ needs.build.outputs.version }}"
+          ZIP_FILE="DHBootlegToolkit-${VERSION}.zip"
+          gh release download "${VERSION}" -p "${ZIP_FILE}" -D archives
+          echo "✅ Downloaded current release: ${ZIP_FILE}"
+
+          # Download previous releases for delta updates
+          PREVIOUS_RELEASES=$(gh release list --limit 4 --json tagName --jq '.[].tagName' | grep -v "^${VERSION}$" | head -3)
+
+          for prev_version in $PREVIOUS_RELEASES; do
+            prev_zip="DHBootlegToolkit-${prev_version}.zip"
+            if gh release download "${prev_version}" -p "${prev_zip}" -D archives 2>/dev/null; then
+              echo "✅ Downloaded previous release: ${prev_zip}"
+            else
+              echo "⚠️  Could not download: ${prev_zip}"
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate appcast
+        run: |
+          export SPARKLE_EDDSA_PRIVATE_KEY="${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}"
+
+          ./bin/generate_appcast archives/ \
+            --output appcast.xml \
+            --link "https://github.com/lRoMYl/DHBootlegToolkit" \
+            --release-notes-url-prefix "https://github.com/lRoMYl/DHBootlegToolkit/releases/tag/"
+
+          echo "✅ Generated appcast.xml"
+          head -50 appcast.xml
+
+      - name: Commit appcast to repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add appcast.xml
+
+          if git diff --staged --quiet; then
+            echo "✅ No appcast changes needed"
+          else
+            git commit -m "chore: update appcast for ${{ needs.build.outputs.version }} [skip ci]"
+            git push origin master
+            echo "✅ Appcast updated and committed"
+          fi
+
   update-homebrew:
     name: Update Homebrew Cask
-    needs: build
+    needs: [build, update-appcast]
     runs-on: macos-latest
 
     steps:

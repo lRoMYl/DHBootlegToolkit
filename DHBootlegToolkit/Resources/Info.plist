@@ -22,5 +22,17 @@
     <true/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+
+    <!-- Sparkle Configuration -->
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/lRoMYl/DHBootlegToolkit/master/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>HG1bJXseHkT7q4Vq7qvW+P9oS79EdkBhm7yc4UGGfcI=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
+    <key>SUAllowsAutomaticUpdates</key>
+    <false/>
 </dict>
 </plist>

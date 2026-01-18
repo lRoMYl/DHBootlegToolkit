@@ -18,6 +18,9 @@ settings:
 packages:
   DHBootlegToolkitCore:
     path: DHBootlegToolkitCore
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.8.1
 
 targets:
   DHBootlegToolkit:
@@ -32,6 +35,8 @@ targets:
         type: folder
     dependencies:
       - package: DHBootlegToolkitCore
+      - package: Sparkle
+        product: Sparkle
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.dhbootlegtoolkit.app
@@ -52,6 +57,7 @@ targets:
         com.apple.security.app-sandbox: false
         com.apple.security.files.user-selected.read-write: true
         com.apple.security.network.client: true
+        com.apple.security.cs.disable-library-validation: true
 
   DHBootlegToolkitTests:
     type: bundle.unit-test
