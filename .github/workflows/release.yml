@@ -44,8 +44,6 @@ jobs:
             MARKETING_VERSION=${{ steps.version.outputs.version }} \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
             clean build
 
       - name: Locate built app
@@ -67,6 +65,12 @@ jobs:
             echo "❌ Version mismatch! Expected ${{ steps.version.outputs.version }}, got $BUILT_VERSION"
             exit 1
           fi
+
+      - name: Ad-hoc sign the app for Sparkle compatibility
+        run: |
+          codesign --force --deep --sign - "${{ steps.app.outputs.app_path }}"
+          echo "✅ App signed with ad-hoc signature"
+          codesign -dvvv "${{ steps.app.outputs.app_path }}" 2>&1 | grep "Signature="
 
       - name: Create zip file
         id: zip
