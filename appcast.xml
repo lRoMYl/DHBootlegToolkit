@@ -6,6 +6,19 @@
         <description>Most recent updates to DHBootlegToolkit</description>
         <language>en</language>
         <item>
+            <title>0.0.7</title>
+            <pubDate>Sun, 18 Jan 2026 13:05:58 +0000</pubDate>
+            <link>https://github.com/lRoMYl/DHBootlegToolkit</link>
+            <sparkle:version>18</sparkle:version>
+            <sparkle:shortVersionString>0.0.7</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://raw.githubusercontent.com/lRoMYl/DHBootlegToolkit/master/DHBootlegToolkit-0.0.7.zip" length="15305713" type="application/octet-stream" sparkle:edSignature="HnIQVng0o+x68Im4N/7duYK8AS/6nMjNB9TX0dAAYCY3Obxp2b8DWhZfI+yI8nSpCSpxww7PMZd5YokW+42aAw=="/>
+            <sparkle:deltas>
+                <enclosure url="https://raw.githubusercontent.com/lRoMYl/DHBootlegToolkit/master/DHBootlegToolkit18-17.delta" sparkle:deltaFrom="17" length="2678" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="860336" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="DfNzBQTLcMmDTxA1pBdTCcvmPAWzYEthImCuwv6iHMSdDMU0WhoXDtimCpj1Rcl1SeTzhPzSeEzOGcj100+nDg=="/>
+                <enclosure url="https://raw.githubusercontent.com/lRoMYl/DHBootlegToolkit/master/DHBootlegToolkit18-16.delta" sparkle:deltaFrom="16" length="2678" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="860336" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="iX0Ep54FApsEW5jS8ckqQRRdk8XyZkaXTz9WpElZOos5ic2hr1qYygfjATMNUBPTLT/GROUwI4iKKVl3Va/lCg=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>0.0.6</title>
             <pubDate>Sun, 18 Jan 2026 10:37:13 +0000</pubDate>
             <link>https://github.com/lRoMYl/DHBootlegToolkit</link>
