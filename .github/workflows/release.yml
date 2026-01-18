@@ -192,10 +192,9 @@ jobs:
 
       - name: Generate appcast
         run: |
-          export SPARKLE_EDDSA_PRIVATE_KEY="${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}"
-
-          ./bin/generate_appcast archives/ \
-            --output appcast.xml \
+          printf "${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}" | ./bin/generate_appcast archives/ \
+            --ed-key-file - \
+            -o appcast.xml \
             --link "https://github.com/lRoMYl/DHBootlegToolkit" \
             --release-notes-url-prefix "https://github.com/lRoMYl/DHBootlegToolkit/releases/tag/"
 
