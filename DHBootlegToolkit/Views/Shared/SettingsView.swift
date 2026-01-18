@@ -113,7 +113,12 @@ struct SettingsView: View {
 
             Section("About") {
                 LabeledContent("App Version") {
-                    Text("1.0.0")
+                    if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+                       let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
+                        Text("\(version) (\(build))")
+                    } else {
+                        Text("Unknown")
+                    }
                 }
 
                 LabeledContent("macOS Version") {

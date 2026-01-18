@@ -1,12 +1,29 @@
 import SwiftUI
 import AppKit
 import DHBootlegToolkitCore
+import Sparkle
 
 // MARK: - App Delegate
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var updaterController: SPUStandardUpdaterController?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Initialize Sparkle updater
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: nil,
+            userDriverDelegate: nil
+        )
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return true
+    }
+
+    // Expose updater for menu commands
+    var updater: SPUUpdater? {
+        updaterController?.updater
     }
 }
 
@@ -75,6 +92,14 @@ struct DHBootlegToolkitApp: App {
                 }
         }
         .commands {
+            // Add "Check for Updates" menu item
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates...") {
+                    appDelegate.updater?.checkForUpdates()
+                }
+                Divider()
+            }
+
             CommandGroup(replacing: .newItem) {
                 Button("New Translation Key") {
                     appStore.createNewKey()
