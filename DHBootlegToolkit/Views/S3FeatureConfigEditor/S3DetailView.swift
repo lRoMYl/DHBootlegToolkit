@@ -1,5 +1,7 @@
 import SwiftUI
 import DHBootlegToolkitCore
+import JSONEditorCore
+import JSONEditorUI
 
 // MARK: - Add Field Context
 
@@ -152,7 +154,12 @@ struct S3DetailView: View {
             treeContentSection(country)
         }
         .overlay(alignment: .bottomTrailing) {
-            validationOverlay
+            ValidationOverlay(
+                isLoading: isValidating,
+                validationResult: validationResult,
+                isExpanded: $isValidationPanelExpanded,
+                onErrorTap: handleErrorTap
+            )
         }
         .task(id: country.id) {
             // Use task(id:) instead of onChange - fires on both initial appearance AND when ID changes
@@ -297,39 +304,13 @@ struct S3DetailView: View {
         }
     }
 
-    // MARK: - Validation Overlay
-
-    @ViewBuilder
-    private var validationOverlay: some View {
-        // Validation panel or loading indicator (positioned at bottom right)
-        if isValidating {
-            // Show loading state as collapsed bubble with glass effect
-            ProgressView()
-                .controlSize(.small)
-                .frame(width: 44, height: 44)
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay {
-                    Circle()
-                        .strokeBorder(Color.blue.opacity(0.3), lineWidth: 1)
-                }
-                .shadow(color: Color.blue.opacity(0.15), radius: 8, x: 0, y: 2)
-                .padding(16)
-                .transition(.opacity)
-        } else if let result = validationResult, showValidationPanel {
-            // Always show validation panel (success or errors)
-            if isValidationPanelExpanded {
-                validationPanelExpanded(result: result)
-            } else {
-                validationPanelCollapsed(result: result)
-            }
-        }
-    }
+    // MARK: - Validation Overlay (now using generic ValidationOverlay from JSONEditorUI)
 
     // MARK: - Search Bar Section
 
     private var searchBarSection: some View {
         HStack(spacing: 8) {
-            S3SearchBar(
+            JSONSearchBar(
                 searchQuery: $searchQuery,
                 exactMatch: $searchExactMatch,
                 caseSensitive: $searchCaseSensitive,
@@ -580,162 +561,6 @@ struct S3DetailView: View {
             scrollProxy: proxy
         )
     }
-
-    // MARK: - Validation Panel Views
-
-    /// Collapsed validation panel - shows as a compact circular indicator
-    @ViewBuilder
-    private func validationPanelCollapsed(result: JSONSchemaValidationResult) -> some View {
-        Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                isValidationPanelExpanded = true
-            }
-        } label: {
-            ZStack {
-                if result.errorCount > 0 {
-                    // Error state: show icon with number badge
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(result.errorCount > 0 ? .red : .orange)
-                        .font(.title3)
-
-                    // Number badge in top-right
-                    Text("\(result.errorCount)")
-                        .font(.caption2.bold())
-                        .foregroundStyle(.white)
-                        .padding(4)
-                        .background(result.errorCount > 0 ? Color.red : Color.orange, in: Circle())
-                        .offset(x: 12, y: -12)
-                } else {
-                    // Success state: show checkmark
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.title3)
-                }
-            }
-            .frame(width: 44, height: 44)
-            .background(.ultraThinMaterial, in: Circle())
-            .overlay {
-                Circle()
-                    .strokeBorder(
-                        result.errorCount > 0
-                            ? (result.errorCount > 0 ? Color.red : Color.orange).opacity(0.3)
-                            : Color.green.opacity(0.3),
-                        lineWidth: 1
-                    )
-            }
-            .shadow(
-                color: result.errorCount > 0
-                    ? (result.errorCount > 0 ? Color.red : Color.orange).opacity(0.2)
-                    : Color.green.opacity(0.2),
-                radius: 8,
-                x: 0,
-                y: 2
-            )
-        }
-        .buttonStyle(.plain)
-        .padding(16)
-        .transition(.opacity)
-    }
-
-    /// Expanded validation panel - shows full details with error chips and glass effect
-    @ViewBuilder
-    private func validationPanelExpanded(result: JSONSchemaValidationResult) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: result.errorCount > 0 ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                    .foregroundStyle(result.errorCount > 0 ? .red : .green)
-                    .imageScale(.medium)
-
-                if result.errorCount > 0 {
-                    Text("\(result.errorCount) error\(result.errorCount == 1 ? "" : "s")\(result.warningCount > 0 ? ", \(result.warningCount) warning\(result.warningCount == 1 ? "" : "s")" : "")")
-                        .font(.headline)
-                } else {
-                    Text("Validation passed")
-                        .font(.headline)
-                        .foregroundStyle(.green)
-                }
-
-                Spacer()
-
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        isValidationPanelExpanded = false
-                    }
-                } label: {
-                    Image(systemName: "chevron.down.circle.fill")
-                        .foregroundStyle(.secondary)
-                        .imageScale(.large)
-                }
-                .buttonStyle(.plain)
-            }
-
-            if result.errorCount > 0 {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(result.errors) { error in
-                            ValidationErrorChip(error: error) {
-                                handleErrorTap(error)
-                            }
-                        }
-                    }
-                }
-            } else {
-                Text("All schema validations passed successfully")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: 500)
-        .padding(16)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder((result.errorCount > 0 ? Color.red : Color.green).opacity(0.3), lineWidth: 1)
-        }
-        .shadow(color: (result.errorCount > 0 ? Color.red : Color.green).opacity(0.2), radius: 12, x: 0, y: 4)
-        .padding(16)
-        .transition(.asymmetric(
-            insertion: .scale(scale: 0.8, anchor: .bottomTrailing).combined(with: .opacity),
-            removal: .scale(scale: 0.8, anchor: .bottomTrailing).combined(with: .opacity)
-        ))
-    }
-}
-
-// MARK: - Validation Error Chip
-
-struct ValidationErrorChip: View {
-    let error: ValidationError
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 6) {
-                Image(systemName: error.severity == .error ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(error.severity == .error ? .red : .orange)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(error.pathString)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.primary)
-
-                    Text(error.message)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-            .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder((error.severity == .error ? Color.red : Color.orange).opacity(0.2), lineWidth: 0.5)
-            }
-        }
-        .buttonStyle(.plain)
-        .help("Click to navigate to this error")
-    }
 }
 
 // MARK: - S3 Tree Content View
@@ -795,134 +620,6 @@ struct S3TreeContentView: View {
                     }
                 }
             }
-        }
-    }
-}
-
-// MARK: - S3 Search Bar
-
-/// Search bar with text editor-style navigation (next/prev buttons)
-struct S3SearchBar: View {
-    @Binding var searchQuery: String
-    @Binding var exactMatch: Bool
-    @Binding var caseSensitive: Bool
-    let currentMatch: Int
-    let totalMatches: Int
-    let onNext: () -> Void
-    let onPrevious: () -> Void
-    let focusCoordinator: FieldFocusCoordinator
-    @FocusState private var localFocus: FieldIdentifier?
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-
-            TextField("Search keys...", text: $searchQuery)
-                .textFieldStyle(.plain)
-                .focused($localFocus, equals: .searchBar)
-
-            if !searchQuery.isEmpty {
-                searchOptionsView
-                matchCounterView
-                navigationButtons
-                clearButton
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .onChange(of: focusCoordinator.focusedField) { _, newValue in
-            localFocus = newValue
-        }
-        .onChange(of: localFocus) { _, newValue in
-            if newValue != focusCoordinator.focusedField {
-                if let newValue = newValue {
-                    focusCoordinator.requestFocus(newValue)
-                } else {
-                    focusCoordinator.clearFocus()
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var matchCounterView: some View {
-        if totalMatches > 0 {
-            Text("\(currentMatch) of \(totalMatches)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(4)
-        } else {
-            Text("No matches")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(4)
-        }
-    }
-
-    private var navigationButtons: some View {
-        HStack(spacing: 4) {
-            Button(action: onPrevious) {
-                Image(systemName: "chevron.up")
-                    .font(.caption.weight(.semibold))
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(totalMatches == 0)
-
-            Button(action: onNext) {
-                Image(systemName: "chevron.down")
-                    .font(.caption.weight(.semibold))
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(totalMatches == 0)
-        }
-    }
-
-    private var clearButton: some View {
-        Button {
-            searchQuery = ""
-        } label: {
-            Image(systemName: "xmark.circle.fill")
-                .foregroundStyle(.secondary)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var searchOptionsView: some View {
-        HStack(spacing: 4) {
-            Button {
-                exactMatch.toggle()
-            } label: {
-                Text("Exact")
-                    .font(.caption)
-                    .foregroundStyle(exactMatch ? .white : .secondary)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .tint(exactMatch ? .blue : .clear)
-            .help("Exact key match")
-
-            Button {
-                caseSensitive.toggle()
-            } label: {
-                Text("Aa")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(caseSensitive ? .white : .secondary)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .tint(caseSensitive ? .blue : .clear)
-            .help("Case sensitive")
         }
     }
 }
