@@ -84,15 +84,21 @@ jobs:
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
 
-          # Get unresolved review threads count
-          UNRESOLVED=$(gh pr view $PR_NUMBER --json reviewThreads --jq '[.reviewThreads[] | select(.isResolved == false)] | length')
+          # Check review decision (APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED)
+          REVIEW_DECISION=$(gh pr view $PR_NUMBER --json reviewDecision --jq '.reviewDecision // "REVIEW_REQUIRED"')
 
-          echo "unresolved_count=$UNRESOLVED" >> $GITHUB_OUTPUT
+          echo "Review decision: $REVIEW_DECISION"
 
-          if [ "$UNRESOLVED" -eq 0 ]; then
-            echo "No unresolved comments found ✅"
+          # Count blocking reviews (changes requested)
+          CHANGES_REQUESTED=$(gh pr view $PR_NUMBER --json reviews --jq '[.reviews[] | select(.state == "CHANGES_REQUESTED")] | length')
+
+          echo "unresolved_count=$CHANGES_REQUESTED" >> $GITHUB_OUTPUT
+          echo "review_decision=$REVIEW_DECISION" >> $GITHUB_OUTPUT
+
+          if [ "$CHANGES_REQUESTED" -eq 0 ]; then
+            echo "No blocking reviews found ✅"
           else
-            echo "Found $UNRESOLVED unresolved comment(s) ⏳"
+            echo "Found $CHANGES_REQUESTED review(s) requesting changes ⏳"
           fi
 
       - name: Check existing approvals
@@ -141,7 +147,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
-          UNRESOLVED=${{ steps.check_comments.outputs.unresolved_count }}
+          CHANGES_REQUESTED=${{ steps.check_comments.outputs.unresolved_count }}
           BUILD_STATUS=${{ steps.build.outputs.build_status }}
 
           COMMENT="⏳ **Auto-approval pending**
@@ -154,9 +160,9 @@ jobs:
           - ❌ Build failed - please fix build errors"
           fi
 
-          if [ "$UNRESOLVED" != "0" ]; then
+          if [ "$CHANGES_REQUESTED" != "0" ]; then
             COMMENT="$COMMENT
-          - 💬 $UNRESOLVED unresolved review comment(s) - please resolve all discussions"
+          - 💬 $CHANGES_REQUESTED review(s) requesting changes - please address the feedback"
           fi
 
           COMMENT="$COMMENT
