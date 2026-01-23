@@ -46,10 +46,9 @@ jobs:
   build-and-approve:
     name: Build & Auto-Approve
     runs-on: macos-latest
-    if: github.event.pull_request.draft == false
     # Wait for Claude review to complete first (if it ran)
     needs: [claude-review]
-    # Continue even if Claude review is skipped
+    # Continue even if Claude review is skipped, but only for non-draft PRs
     if: always() && github.event.pull_request.draft == false
 
     steps:
