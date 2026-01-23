@@ -80,7 +80,7 @@ jobs:
         id: check_comments
         if: success()
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
 
@@ -105,7 +105,7 @@ jobs:
         id: check_approvals
         if: success()
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
 
@@ -125,7 +125,7 @@ jobs:
           steps.check_comments.outputs.unresolved_count == '0' &&
           steps.check_approvals.outputs.bot_approved == '0'
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
 
@@ -144,7 +144,7 @@ jobs:
           (steps.build.outputs.build_status == 'failed' ||
            steps.check_comments.outputs.unresolved_count != '0')
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
           CHANGES_REQUESTED=${{ steps.check_comments.outputs.unresolved_count }}
