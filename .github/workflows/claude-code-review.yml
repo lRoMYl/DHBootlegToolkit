@@ -1,29 +1,31 @@
-name: Claude Code Review
+name: Claude Code Review & Auto-Approval
 
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
+  pull_request_review_comment:
+    types: [created, deleted]
+  issue_comment:
+    types: [created, deleted]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+  id-token: write
+  actions: read
 
 jobs:
+  # Job 1: Claude automatically reviews the code
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-
+    name: Claude Code Review
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-      issues: read
-      id-token: write
+    if: |
+      github.event.pull_request.draft == false &&
+      (github.event_name == 'pull_request' &&
+       contains(fromJSON('["opened", "synchronize", "reopened", "ready_for_review"]'), github.event.action))
 
     steps:
       - name: Checkout repository
@@ -39,6 +41,135 @@ jobs:
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
 
+  # Job 2: Build check and auto-approval
+  build-and-approve:
+    name: Build & Auto-Approve
+    runs-on: macos-latest
+    if: github.event.pull_request.draft == false
+    # Wait for Claude review to complete first (if it ran)
+    needs: [claude-review]
+    # Continue even if Claude review is skipped
+    if: always() && github.event.pull_request.draft == false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build project
+        id: build
+        run: |
+          xcodebuild -scheme DHBootlegToolkit -configuration Debug build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            2>&1 | tee build.log
+
+          if [ ${PIPESTATUS[0]} -eq 0 ]; then
+            echo "build_status=success" >> $GITHUB_OUTPUT
+          else
+            echo "build_status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Check for unresolved comments
+        id: check_comments
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+
+          # Get unresolved review threads count
+          UNRESOLVED=$(gh pr view $PR_NUMBER --json reviewThreads --jq '[.reviewThreads[] | select(.isResolved == false)] | length')
+
+          echo "unresolved_count=$UNRESOLVED" >> $GITHUB_OUTPUT
+
+          if [ "$UNRESOLVED" -eq 0 ]; then
+            echo "No unresolved comments found ✅"
+          else
+            echo "Found $UNRESOLVED unresolved comment(s) ⏳"
+          fi
+
+      - name: Check existing approvals
+        id: check_approvals
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+
+          # Check if this bot has already approved
+          BOT_APPROVED=$(gh pr view $PR_NUMBER --json reviews --jq '[.reviews[] | select(.author.login == "github-actions[bot]" and .state == "APPROVED")] | length')
+
+          echo "bot_approved=$BOT_APPROVED" >> $GITHUB_OUTPUT
+
+          if [ "$BOT_APPROVED" -gt 0 ]; then
+            echo "Already approved by GitHub Actions ✅"
+          fi
+
+      - name: Auto-approve PR
+        if: |
+          success() &&
+          steps.build.outputs.build_status == 'success' &&
+          steps.check_comments.outputs.unresolved_count == '0' &&
+          steps.check_approvals.outputs.bot_approved == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+
+          gh pr review $PR_NUMBER --approve --body "✅ **Auto-approved by GitHub Actions**
+
+          All checks passed:
+          - Build successful
+          - All review comments resolved
+          - No blocking issues found
+
+          This PR is ready to merge!"
+
+      - name: Comment on blocking issues
+        if: |
+          success() &&
+          (steps.build.outputs.build_status == 'failed' ||
+           steps.check_comments.outputs.unresolved_count != '0')
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          UNRESOLVED=${{ steps.check_comments.outputs.unresolved_count }}
+          BUILD_STATUS=${{ steps.build.outputs.build_status }}
+
+          COMMENT="⏳ **Auto-approval pending**
+
+          This PR cannot be auto-approved yet due to:
+          "
+
+          if [ "$BUILD_STATUS" == "failed" ]; then
+            COMMENT="$COMMENT
+          - ❌ Build failed - please fix build errors"
+          fi
+
+          if [ "$UNRESOLVED" != "0" ]; then
+            COMMENT="$COMMENT
+          - 💬 $UNRESOLVED unresolved review comment(s) - please resolve all discussions"
+          fi
+
+          COMMENT="$COMMENT
+
+          Once all issues are resolved, this PR will be automatically approved."
+
+          gh pr comment $PR_NUMBER --body "$COMMENT"
+
+      - name: Upload build log on failure
+        if: failure() && steps.build.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 7
