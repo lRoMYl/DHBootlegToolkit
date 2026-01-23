@@ -1,5 +1,7 @@
 import SwiftUI
 import DHBootlegToolkitCore
+import JSONEditorCore
+import JSONEditorUI
 
 struct TranslationDetailView: View {
     @Environment(AppStore.self) private var store
@@ -55,6 +57,10 @@ struct TranslationFormView: View {
     @State private var errorMessage = ""
     @State private var showOverwriteConfirmation = false
     @State private var isSaving = false
+
+    // Validation UI state
+    @State private var validationResult: JSONSchemaValidationResult? = nil
+    @State private var isValidationPanelExpanded: Bool = false
 
     init(key: TranslationKey) {
         self.key = key
@@ -409,15 +415,7 @@ struct TranslationFormView: View {
                         }
                     }
 
-                    // Validation Status (only in edit mode)
-                    if !isReadOnly {
-                        ValidationStatusView(
-                            editedKey: editedKey,
-                            keyValidationError: keyValidationError,
-                            charLimitError: charLimitError,
-                            targetLanguagesError: targetLanguagesError
-                        )
-                    }
+                    // Validation Status moved to floating overlay (see ValidationOverlay below)
                 }
                 .padding()
                 .padding(.bottom, !isReadOnly ? 60 : 0) // Add bottom padding for fixed toolbar
@@ -493,6 +491,19 @@ struct TranslationFormView: View {
                 }
             }
         }
+        .overlay(alignment: .bottomTrailing) {
+            if !isReadOnly && validationResult != nil {
+                ValidationOverlay(
+                    isLoading: false,
+                    validationResult: validationResult,
+                    isExpanded: $isValidationPanelExpanded,
+                    onErrorTap: { error in
+                        // Error navigation not implemented yet
+                        // Could be added in future to focus on specific fields
+                    }
+                )
+            }
+        }
         .alert("Save Error", isPresented: $showError) {
             Button("OK") { }
         } message: {
@@ -514,6 +525,8 @@ struct TranslationFormView: View {
             // Sync text fields from editedKey
             targetLanguagesText = store.editedKey?.targetLanguages?.joined(separator: ", ") ?? ""
             charLimitText = store.editedKey?.charLimit.map { String($0) } ?? ""
+            // Initialize validation
+            updateValidationResult()
         }
         .onChange(of: key) { _, newKey in
             // Only reset if switching to a different key
@@ -525,8 +538,38 @@ struct TranslationFormView: View {
                 charLimitError = nil
                 targetLanguagesError = nil
                 store.hasChanges = false
+                updateValidationResult()
             }
         }
+        .onChange(of: editedKey.key) { _, _ in
+            updateValidationResult()
+        }
+        .onChange(of: editedKey.translation) { _, _ in
+            updateValidationResult()
+        }
+        .onChange(of: editedKey.notes) { _, _ in
+            updateValidationResult()
+        }
+        .onChange(of: keyValidationError) { _, _ in
+            updateValidationResult()
+        }
+        .onChange(of: charLimitError) { _, _ in
+            updateValidationResult()
+        }
+        .onChange(of: targetLanguagesError) { _, _ in
+            updateValidationResult()
+        }
+    }
+
+    // MARK: - Validation
+
+    private func updateValidationResult() {
+        validationResult = TranslationValidationAdapter.createValidationResult(
+            editedKey: editedKey,
+            keyValidationError: keyValidationError,
+            charLimitError: charLimitError,
+            targetLanguagesError: targetLanguagesError
+        )
     }
 
     // MARK: - Save Actions
@@ -554,68 +597,6 @@ struct TranslationFormView: View {
     }
 }
 
-// MARK: - Validation Status View
-
-struct ValidationStatusView: View {
-    let editedKey: TranslationKey
-    let keyValidationError: String?
-    let charLimitError: String?
-    let targetLanguagesError: String?
-
-    private var issues: [String] {
-        var result: [String] = []
-
-        if editedKey.key.isEmpty {
-            result.append("Key name is required")
-        } else if keyValidationError != nil {
-            result.append(keyValidationError!)
-        }
-
-        if editedKey.translation.isEmpty {
-            result.append("Translation is required")
-        }
-
-        if editedKey.notes.isEmpty {
-            result.append("Notes for translators is required")
-        }
-
-        if let charError = charLimitError {
-            result.append(charError)
-        }
-
-        if let langError = targetLanguagesError {
-            result.append(langError)
-        }
-
-        return result
-    }
-
-    var body: some View {
-        if !issues.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                    Text("Please fix the following to save:")
-                        .font(.headline)
-                }
-
-                ForEach(issues, id: \.self) { issue in
-                    HStack(spacing: 6) {
-                        Image(systemName: "circle.fill")
-                            .font(.system(size: 6))
-                        Text(issue)
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-            }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-        }
-    }
-}
 
 #Preview {
     TranslationDetailView()

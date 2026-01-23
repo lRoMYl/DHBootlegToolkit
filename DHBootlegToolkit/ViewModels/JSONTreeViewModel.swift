@@ -1,6 +1,7 @@
 import SwiftUI
 import Observation
 import DHBootlegToolkitCore
+import JSONEditorCore
 
 // MARK: - JSON Tree View Model
 
