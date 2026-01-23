@@ -38,15 +38,27 @@ struct JSONSearchMatches {
     static let empty = JSONSearchMatches(paths: [])
 
     /// Build matches from JSON, searching keys and string values
-    static func build(from json: [String: Any], query: String) -> JSONSearchMatches {
+    /// - Parameters:
+    ///   - json: The JSON dictionary to search
+    ///   - query: The search query string
+    ///   - exactMatch: If true, requires exact key match instead of substring match
+    ///   - caseSensitive: If true, performs case-sensitive search
+    static func build(from json: [String: Any], query: String, exactMatch: Bool = false, caseSensitive: Bool = false) -> JSONSearchMatches {
         guard !query.isEmpty else { return .empty }
 
         var matchingPaths: [[String]] = []
-        let lowercaseQuery = query.lowercased()
+        let searchQuery = caseSensitive ? query : query.lowercased()
 
         func search(in value: Any, path: [String], key: String) {
             let currentPath = path + [key]
-            let keyMatches = key.lowercased().contains(lowercaseQuery)
+            let searchKey = caseSensitive ? key : key.lowercased()
+
+            let keyMatches: Bool
+            if exactMatch {
+                keyMatches = searchKey == searchQuery
+            } else {
+                keyMatches = searchKey.contains(searchQuery)
+            }
 
             if let dict = value as? [String: Any] {
                 if keyMatches {
@@ -63,7 +75,14 @@ struct JSONSearchMatches {
                     search(in: item, path: currentPath, key: "[\(index)]")
                 }
             } else if let string = value as? String {
-                let valueMatches = string.lowercased().contains(lowercaseQuery)
+                let searchValue = caseSensitive ? string : string.lowercased()
+                let valueMatches: Bool
+                if exactMatch {
+                    valueMatches = searchValue == searchQuery
+                } else {
+                    valueMatches = searchValue.contains(searchQuery)
+                }
+
                 if keyMatches || valueMatches {
                     matchingPaths.append(currentPath)
                 }

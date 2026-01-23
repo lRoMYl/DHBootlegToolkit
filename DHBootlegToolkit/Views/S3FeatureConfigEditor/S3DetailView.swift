@@ -20,6 +20,8 @@ struct S3DetailView: View {
     @State private var debouncedQuery: String = ""
     @State private var searchMatches: JSONSearchMatches = .empty
     @State private var debounceTask: Task<Void, Never>?
+    @State private var searchExactMatch: Bool = false
+    @State private var searchCaseSensitive: Bool = false
 
     // View model for virtualized tree rendering
     @State private var treeViewModel = JSONTreeViewModel()
@@ -237,6 +239,12 @@ struct S3DetailView: View {
         .onChange(of: debouncedQuery) { _, query in
             handleDebouncedQueryChange(query, country: country)
         }
+        .onChange(of: searchExactMatch) { _, _ in
+            handleDebouncedQueryChange(debouncedQuery, country: country)
+        }
+        .onChange(of: searchCaseSensitive) { _, _ in
+            handleDebouncedQueryChange(debouncedQuery, country: country)
+        }
         .sheet(item: $addFieldContext) { context in
             AddFieldSheet(parentPath: context.parentPath)
         }
@@ -323,6 +331,8 @@ struct S3DetailView: View {
         HStack(spacing: 8) {
             S3SearchBar(
                 searchQuery: $searchQuery,
+                exactMatch: $searchExactMatch,
+                caseSensitive: $searchCaseSensitive,
                 currentMatch: searchMatches.displayIndex,
                 totalMatches: searchMatches.count,
                 onNext: { searchMatches.next() },
@@ -516,7 +526,12 @@ struct S3DetailView: View {
 
     private func handleDebouncedQueryChange(_ query: String, country: S3CountryConfig) {
         if let json = country.parseConfigJSON() {
-            searchMatches = query.isEmpty ? .empty : JSONSearchMatches.build(from: json, query: query)
+            searchMatches = query.isEmpty ? .empty : JSONSearchMatches.build(
+                from: json,
+                query: query,
+                exactMatch: searchExactMatch,
+                caseSensitive: searchCaseSensitive
+            )
         }
     }
 
@@ -789,6 +804,8 @@ struct S3TreeContentView: View {
 /// Search bar with text editor-style navigation (next/prev buttons)
 struct S3SearchBar: View {
     @Binding var searchQuery: String
+    @Binding var exactMatch: Bool
+    @Binding var caseSensitive: Bool
     let currentMatch: Int
     let totalMatches: Int
     let onNext: () -> Void
@@ -806,6 +823,7 @@ struct S3SearchBar: View {
                 .focused($localFocus, equals: .searchBar)
 
             if !searchQuery.isEmpty {
+                searchOptionsView
                 matchCounterView
                 navigationButtons
                 clearButton
@@ -878,6 +896,34 @@ struct S3SearchBar: View {
                 .foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)
+    }
+
+    private var searchOptionsView: some View {
+        HStack(spacing: 4) {
+            Button {
+                exactMatch.toggle()
+            } label: {
+                Text("Exact")
+                    .font(.caption)
+                    .foregroundStyle(exactMatch ? .white : .secondary)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .tint(exactMatch ? .blue : .clear)
+            .help("Exact key match")
+
+            Button {
+                caseSensitive.toggle()
+            } label: {
+                Text("Aa")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(caseSensitive ? .white : .secondary)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .tint(caseSensitive ? .blue : .clear)
+            .help("Case sensitive")
+        }
     }
 }
 
