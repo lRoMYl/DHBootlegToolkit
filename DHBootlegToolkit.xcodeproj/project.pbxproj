@@ -7,9 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2222C8A9E4493F229F68C7DA /* JSONEditorUI in Frameworks */ = {isa = PBXBuildFile; productRef = 0431364F3F9C1213C71D9FC6 /* JSONEditorUI */; };
 		4440F7313AC1135B5520A24B /* DHBootlegToolkitCore in Frameworks */ = {isa = PBXBuildFile; productRef = D5FDF42D874FB8B6C0FA849D /* DHBootlegToolkitCore */; };
 		450F065EDF880718587D1E2B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 134AB6E4966C19E0594957A5 /* Assets.xcassets */; };
-		D48ADF68CA104F2EE3393C63 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = D4800BB32219A4F3B4FB77D9 /* Sparkle */; };
+		748373AD6DB8D365E399FF0F /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = D4800BB32219A4F3B4FB77D9 /* Sparkle */; };
+		D48ADF68CA104F2EE3393C63 /* JSONEditorCore in Frameworks */ = {isa = PBXBuildFile; productRef = 1F442AEB0D948EEABA8FA1ED /* JSONEditorCore */; };
 		ED8C29D999E8E78FE30EBC18 /* DHBootlegToolkitCore in Frameworks */ = {isa = PBXBuildFile; productRef = 6F101BE4C58885EED4986F8B /* DHBootlegToolkitCore */; };
 /* End PBXBuildFile section */
 
@@ -25,6 +27,8 @@
 
 /* Begin PBXFileReference section */
 		134AB6E4966C19E0594957A5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Assets.xcassets; path = DHBootlegToolkit/Assets.xcassets; sourceTree = SOURCE_ROOT; };
+		248DC153D483C15EB8592547 /* JSONEditorCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JSONEditorCore; path = JSONEditorCore; sourceTree = SOURCE_ROOT; };
+		6F8A82950112E96AAA92A826 /* JSONEditorUI */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JSONEditorUI; path = JSONEditorUI; sourceTree = SOURCE_ROOT; };
 		785077D8848C697F302ECB92 /* DHBootlegToolkit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DHBootlegToolkit.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BAA2DCA7F7056296BC5693CD /* DHBootlegToolkitCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = DHBootlegToolkitCore; path = DHBootlegToolkitCore; sourceTree = SOURCE_ROOT; };
 		FFC14A82C043842B140C07FD /* DHBootlegToolkitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DHBootlegToolkitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -57,7 +61,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				ED8C29D999E8E78FE30EBC18 /* DHBootlegToolkitCore in Frameworks */,
-				D48ADF68CA104F2EE3393C63 /* Sparkle in Frameworks */,
+				D48ADF68CA104F2EE3393C63 /* JSONEditorCore in Frameworks */,
+				2222C8A9E4493F229F68C7DA /* JSONEditorUI in Frameworks */,
+				748373AD6DB8D365E399FF0F /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -104,6 +110,8 @@
 			isa = PBXGroup;
 			children = (
 				BAA2DCA7F7056296BC5693CD /* DHBootlegToolkitCore */,
+				248DC153D483C15EB8592547 /* JSONEditorCore */,
+				6F8A82950112E96AAA92A826 /* JSONEditorUI */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -129,6 +137,8 @@
 			name = DHBootlegToolkit;
 			packageProductDependencies = (
 				6F101BE4C58885EED4986F8B /* DHBootlegToolkitCore */,
+				1F442AEB0D948EEABA8FA1ED /* JSONEditorCore */,
+				0431364F3F9C1213C71D9FC6 /* JSONEditorUI */,
 				D4800BB32219A4F3B4FB77D9 /* Sparkle */,
 			);
 			productName = DHBootlegToolkit;
@@ -190,6 +200,8 @@
 			packageReferences = (
 				7015ADB5F17CD09EDE1292CA /* XCRemoteSwiftPackageReference "Sparkle" */,
 				C55F11622091EFA7082ECB91 /* XCLocalSwiftPackageReference "DHBootlegToolkitCore" */,
+				1399648C5813965D836C5757 /* XCLocalSwiftPackageReference "JSONEditorCore" */,
+				A2FE12BD512058850EEC7FCF /* XCLocalSwiftPackageReference "JSONEditorUI" */,
 			);
 			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
@@ -355,7 +367,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = "0.0.3-testing-9";
+				MARKETING_VERSION = 0.0.7;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -439,7 +451,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = "0.0.3-testing-9";
+				MARKETING_VERSION = 0.0.7;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -484,6 +496,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		1399648C5813965D836C5757 /* XCLocalSwiftPackageReference "JSONEditorCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = JSONEditorCore;
+		};
+		A2FE12BD512058850EEC7FCF /* XCLocalSwiftPackageReference "JSONEditorUI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = JSONEditorUI;
+		};
 		C55F11622091EFA7082ECB91 /* XCLocalSwiftPackageReference "DHBootlegToolkitCore" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = DHBootlegToolkitCore;
@@ -502,6 +522,14 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		0431364F3F9C1213C71D9FC6 /* JSONEditorUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = JSONEditorUI;
+		};
+		1F442AEB0D948EEABA8FA1ED /* JSONEditorCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = JSONEditorCore;
+		};
 		6F101BE4C58885EED4986F8B /* DHBootlegToolkitCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = DHBootlegToolkitCore;

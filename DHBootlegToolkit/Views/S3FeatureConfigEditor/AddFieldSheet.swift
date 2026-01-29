@@ -1,5 +1,6 @@
 import SwiftUI
 import DHBootlegToolkitCore
+import JSONEditorCore
 
 // MARK: - Add Field Sheet
 

@@ -18,6 +18,10 @@ settings:
 packages:
   DHBootlegToolkitCore:
     path: DHBootlegToolkitCore
+  JSONEditorCore:
+    path: JSONEditorCore
+  JSONEditorUI:
+    path: JSONEditorUI
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     from: 2.8.1
@@ -35,6 +39,8 @@ targets:
         type: folder
     dependencies:
       - package: DHBootlegToolkitCore
+      - package: JSONEditorCore
+      - package: JSONEditorUI
       - package: Sparkle
         product: Sparkle
     settings:

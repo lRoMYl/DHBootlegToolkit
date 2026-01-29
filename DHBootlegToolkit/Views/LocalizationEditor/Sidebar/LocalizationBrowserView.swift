@@ -1,8 +1,9 @@
 import SwiftUI
 import DHBootlegToolkitCore
+import JSONEditorUI
 
-// Note: Badge components (BadgeStyle, StatusLetterBadge, CounterBadge) are now in
-// Views/Components/Badges/ for reuse across Localization Editor and S3 Editor
+// Note: Badge components (StatusLetterBadge, CounterBadge) are now in JSONEditorUI package
+// for reuse across all editors
 
 // MARK: - Localization Browser View
 
@@ -610,7 +611,16 @@ struct ImageFileRow: View {
                 }
 
                 // Git status badge
-                GitStatusBadge(status: item.gitStatus)
+                switch item.gitStatus {
+                case .added:
+                    StatusLetterBadge.added()
+                case .modified:
+                    StatusLetterBadge.modified()
+                case .deleted:
+                    StatusLetterBadge.deleted()
+                case .unchanged:
+                    EmptyView()
+                }
             }
             .contentShape(Rectangle())
         }
@@ -727,7 +737,16 @@ struct GenericFileRow: View {
                 }
 
                 // Git status badge
-                GitStatusBadge(status: item.gitStatus)
+                switch item.gitStatus {
+                case .added:
+                    StatusLetterBadge.added()
+                case .modified:
+                    StatusLetterBadge.modified()
+                case .deleted:
+                    StatusLetterBadge.deleted()
+                case .unchanged:
+                    EmptyView()
+                }
             }
             .contentShape(Rectangle())
         }
@@ -790,36 +809,6 @@ struct AddNewKeyButton: View {
     }
 }
 
-// MARK: - Git Status Badge (for files)
-
-struct GitStatusBadge: View {
-    let status: GitFileStatus
-
-    private var letter: String {
-        switch status {
-        case .added: return "A"
-        case .modified: return "M"
-        case .deleted: return "D"
-        case .unchanged: return ""
-        }
-    }
-
-    private var badgeColor: Color {
-        switch status {
-        case .added: return .green
-        case .modified: return .blue
-        case .deleted: return .red
-        case .unchanged: return .clear
-        }
-    }
-
-    var body: some View {
-        if status != .unchanged {
-            StatusLetterBadge(letter: letter, color: badgeColor)
-        }
-    }
-}
-
 // MARK: - Deleted Key Row View
 
 struct DeletedKeyRowView: View {
@@ -859,7 +848,7 @@ struct DeletedKeyRowView: View {
             }
 
             // Deleted badge
-            ChangeStatusBadge(status: .deleted)
+            StatusLetterBadge.deleted()
         }
         .opacity(0.7)
         .onHover { isHovering = $0 }
@@ -871,36 +860,6 @@ struct DeletedKeyRowView: View {
                     store.showDiscardKeyConfirmation = true
                 }
             }
-        }
-    }
-}
-
-// MARK: - Change Status Badge (for keys)
-
-struct ChangeStatusBadge: View {
-    let status: KeyChangeStatus
-
-    private var letter: String {
-        switch status {
-        case .added: return "A"
-        case .modified: return "M"
-        case .deleted: return "D"
-        case .unchanged: return ""
-        }
-    }
-
-    private var badgeColor: Color {
-        switch status {
-        case .added: return .green
-        case .modified: return .blue
-        case .deleted: return .red
-        case .unchanged: return .clear
-        }
-    }
-
-    var body: some View {
-        if status != .unchanged {
-            StatusLetterBadge(letter: letter, color: badgeColor)
         }
     }
 }
@@ -955,7 +914,16 @@ struct KeyRowView: View {
                 }
 
                 // Xcode-style change badge
-                ChangeStatusBadge(status: changeStatus)
+                switch changeStatus {
+                case .added:
+                    StatusLetterBadge.added()
+                case .modified:
+                    StatusLetterBadge.modified()
+                case .deleted:
+                    StatusLetterBadge.deleted()
+                case .unchanged:
+                    EmptyView()
+                }
 
                 // Invalid indicator (orange dot)
                 if !key.isValid {

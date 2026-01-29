@@ -1,41 +1,46 @@
-import SwiftUI
+import Foundation
 
 // MARK: - JSON Search Matches
 
 /// Ordered list of matching paths for navigation
-struct JSONSearchMatches {
-    let paths: [[String]]
-    private(set) var currentIndex: Int = 0
+public struct JSONSearchMatches: Sendable {
+    public let paths: [[String]]
+    public private(set) var currentIndex: Int = 0
 
-    var count: Int { paths.count }
-    var isEmpty: Bool { paths.isEmpty }
+    public var count: Int { paths.count }
+    public var isEmpty: Bool { paths.isEmpty }
 
-    var currentPath: [String]? {
+    public var currentPath: [String]? {
         guard !paths.isEmpty else { return nil }
         return paths[currentIndex]
     }
 
     /// 1-based index for display
-    var displayIndex: Int {
+    public var displayIndex: Int {
         isEmpty ? 0 : currentIndex + 1
     }
 
-    mutating func next() {
+    public init(paths: [[String]], currentIndex: Int = 0) {
+        self.paths = paths
+        self.currentIndex = currentIndex
+    }
+
+    public mutating func next() {
         guard !paths.isEmpty else { return }
         currentIndex = (currentIndex + 1) % paths.count
     }
 
-    mutating func previous() {
+    public mutating func previous() {
         guard !paths.isEmpty else { return }
         currentIndex = (currentIndex - 1 + paths.count) % paths.count
     }
 
     /// Reset to first match
-    mutating func reset() {
+    public mutating func reset() {
         currentIndex = 0
     }
 
-    static let empty = JSONSearchMatches(paths: [])
+    public static let empty = JSONSearchMatches(paths: [])
 
     /// Build matches from JSON, searching keys and string values
     /// - Parameters:
@@ -43,7 +48,7 @@ struct JSONSearchMatches {
     ///   - query: The search query string
     ///   - exactMatch: If true, requires exact key match instead of substring match
     ///   - caseSensitive: If true, performs case-sensitive search
-    static func build(from json: [String: Any], query: String, exactMatch: Bool = false, caseSensitive: Bool = false) -> JSONSearchMatches {
+    public static func build(from json: [String: Any], query: String, exactMatch: Bool = false, caseSensitive: Bool = false) -> JSONSearchMatches {
         guard !query.isEmpty else { return .empty }
 
         var matchingPaths: [[String]] = []
@@ -99,4 +104,3 @@ struct JSONSearchMatches {
         return JSONSearchMatches(paths: matchingPaths)
     }
 }
-
