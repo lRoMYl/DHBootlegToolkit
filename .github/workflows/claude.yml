@@ -36,11 +36,21 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Cache Claude Code
+        id: cache-claude
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/claude
+          key: claude-code-${{ runner.os }}-v2.1.25
+          restore-keys: |
+            claude-code-${{ runner.os }}-
+
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          path_to_claude_code_executable: ${{ steps.cache-claude.outputs.cache-hit == 'true' && '~/.local/bin/claude' || '' }}
 
           # This is an optional setting that allows Claude to read CI results on PRs
           additional_permissions: |
