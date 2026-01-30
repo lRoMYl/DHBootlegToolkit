@@ -229,25 +229,19 @@ final class StockTickerStore {
 
     /// Fetch chart data for a specific time range
     func fetchChartData(for symbol: String, range: ChartTimeRange) async {
-        print("[StockTickerStore] fetchChartData called for \(symbol) range: \(range.rawValue)")
-
         guard let worker = yahooWorker else {
-            print("[StockTickerStore] No worker available")
             return
         }
 
         // Check if already cached
         if chartDataCache[symbol]?[range] != nil {
-            print("[StockTickerStore] Data already cached for \(symbol) \(range.rawValue)")
             return
         }
 
-        print("[StockTickerStore] Starting fetch for \(symbol) \(range.rawValue)")
         isLoadingChartData = true
 
         do {
             let chartData = try await worker.fetchChartData(symbol: symbol, range: range)
-            print("[StockTickerStore] Received \(chartData.count) points for \(symbol) \(range.rawValue)")
 
             // Update cache
             if chartDataCache[symbol] == nil {
@@ -255,9 +249,7 @@ final class StockTickerStore {
             }
             chartDataCache[symbol]?[range] = chartData
             isLoadingChartData = false
-            print("[StockTickerStore] Cached data for \(symbol) \(range.rawValue)")
         } catch {
-            print("[StockTickerStore] Error fetching chart data: \(error.localizedDescription)")
             isLoadingChartData = false
             errorMessage = "Failed to load chart data: \(error.localizedDescription)"
         }
@@ -270,7 +262,6 @@ final class StockTickerStore {
 
     /// Change chart time range and fetch data if needed
     func selectChartRange(_ range: ChartTimeRange) {
-        print("[StockTickerStore] selectChartRange called: \(range.rawValue)")
         selectedChartRange = range
 
         // Persist the selection
@@ -278,17 +269,11 @@ final class StockTickerStore {
 
         // Fetch data if not cached
         if let symbol = selectedSymbol {
-            print("[StockTickerStore] Selected symbol: \(symbol)")
             if chartDataCache[symbol]?[range] == nil {
-                print("[StockTickerStore] Data not cached, will fetch")
                 Task {
                     await fetchChartData(for: symbol, range: range)
                 }
-            } else {
-                print("[StockTickerStore] Data already cached for \(symbol) \(range.rawValue)")
             }
-        } else {
-            print("[StockTickerStore] No selected symbol")
         }
     }
 
@@ -351,7 +336,6 @@ final class StockTickerStore {
         if let savedRange = UserDefaults.standard.string(forKey: Self.selectedChartRangeKey),
            let range = ChartTimeRange(rawValue: savedRange) {
             selectedChartRange = range
-            print("[StockTickerStore] Restored chart range: \(range.rawValue)")
         }
     }
 

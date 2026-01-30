@@ -11,6 +11,18 @@ struct CountryFieldValue: Identifiable {
     let currentValue: Any?  // Existing value at path (nil if field doesn't exist)
     var newValue: Any       // Value to apply (can be modified per-country)
     let isNewField: Bool    // True if field doesn't exist in target
+    let isSourceDeleted: Bool  // True if source field is deleted
+
+    enum OperationType {
+        case new, update, delete
+    }
+
+    var operationType: OperationType {
+        if isSourceDeleted {
+            return .delete
+        }
+        return isNewField ? .new : .update
+    }
 }
 
 // MARK: - S3 Apply Field Sheet
@@ -29,6 +41,9 @@ struct S3ApplyFieldSheet: View {
     @State private var countryFieldValues: [CountryFieldValue] = []
     @State private var sourceTreeViewModel = JSONTreeViewModel()
     @State private var focusCoordinator = FieldFocusCoordinator()
+    @State private var isInitializing: Bool = false
+    @State private var initializationProgress: Int = 0
+    @State private var initializationTask: Task<Void, Never>?
 
     enum WizardStep {
         case selectCountries
@@ -184,6 +199,7 @@ struct S3ApplyFieldSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Button {
+                    initializationTask?.cancel()
                     step = .selectCountries
                     countryFieldValues = []  // Clear when going back
                 } label: {
@@ -197,6 +213,44 @@ struct S3ApplyFieldSheet: View {
             .padding(.horizontal)
             .padding(.top, 8)
 
+            if isInitializing {
+                loadingView
+            } else {
+                previewContentView
+            }
+        }
+        .onAppear {
+            initializeCountryFieldValues()
+        }
+        .onDisappear {
+            initializationTask?.cancel()
+        }
+    }
+
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+
+            ProgressView(
+                value: Double(initializationProgress),
+                total: Double(selectedCountries.count)
+            )
+            .frame(maxWidth: 400)
+
+            Text("Loading countries...")
+                .font(.headline)
+
+            Text("\(initializationProgress) / \(selectedCountries.count)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var previewContentView: some View {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Changes Preview")
                     .font(.subheadline.bold())
@@ -227,9 +281,6 @@ struct S3ApplyFieldSheet: View {
                 .padding()
             }
         }
-        .onAppear {
-            initializeCountryFieldValues()
-        }
     }
 
     private var selectedCountriesArray: [S3CountryConfig] {
@@ -242,17 +293,48 @@ struct S3ApplyFieldSheet: View {
               let newValue = store.selectedNodeValue,
               let fieldPath = store.selectedNodePath else { return }
 
-        let pathComponents = fieldPath.split(separator: ".").map(String.init)
+        isInitializing = true
+        initializationProgress = 0
+        countryFieldValues = []
 
-        countryFieldValues = selectedCountriesArray.map { country in
-            let currentValue = getValue(at: pathComponents, from: country.parseConfigJSON() ?? [:])
-            return CountryFieldValue(
-                id: country.id,
-                countryConfig: country,
-                currentValue: currentValue,
-                newValue: newValue,  // Start with source value
-                isNewField: currentValue == nil
-            )
+        let pathComponents = fieldPath.split(separator: ".").map(String.init)
+        let countriesArray = selectedCountriesArray
+        let isSourceDeleted = store.selectedNodeIsDeleted
+
+        initializationTask = Task {
+            var values: [CountryFieldValue] = []
+
+            for country in countriesArray {
+                if Task.isCancelled { break }
+
+                // Parse JSON
+                let json = country.parseConfigJSON()
+
+                // Get current value
+                let currentValue = getValue(at: pathComponents, from: json ?? [:])
+
+                let fieldValue = CountryFieldValue(
+                    id: country.id,
+                    countryConfig: country,
+                    currentValue: currentValue,
+                    newValue: newValue,
+                    isNewField: currentValue == nil,
+                    isSourceDeleted: isSourceDeleted
+                )
+
+                values.append(fieldValue)
+
+                await MainActor.run {
+                    initializationProgress += 1
+                }
+            }
+
+            await MainActor.run {
+                if !Task.isCancelled {
+                    countryFieldValues = values
+                }
+                isInitializing = false
+            }
         }
     }
 
@@ -348,8 +430,17 @@ struct S3ApplyFieldSheet: View {
                 continue
             }
 
-            if let updated = country.withUpdatedValue(fieldValue.newValue, at: pathComponents) {
-                guard let data = updated.configData else { continue }
+            let updated: S3CountryConfig?
+
+            if fieldValue.isSourceDeleted {
+                // Delete the field from target country
+                updated = country.withDeletedField(at: pathComponents)
+            } else {
+                // Set the field value in target country
+                updated = country.withUpdatedValue(fieldValue.newValue, at: pathComponents)
+            }
+
+            if let updated = updated, let data = updated.configData {
                 try data.write(to: updated.configURL, options: .atomic)
             }
         }
@@ -446,8 +537,12 @@ struct CountryFieldPreviewCard: View {
                 originalValueSection(currentValue, coordinator: focusCoordinator)
             }
 
-            // New value section - editable
-            newValueSection
+            // New value section - editable OR deletion warning
+            if fieldValue.isSourceDeleted {
+                deletionWarningSection
+            } else {
+                newValueSection
+            }
         }
         .padding()
         .background(Color(nsColor: .controlBackgroundColor))
@@ -475,7 +570,13 @@ struct CountryFieldPreviewCard: View {
     }
 
     private var diffTypeBadge: some View {
-        let (text, color) = fieldValue.isNewField ? ("NEW", Color.blue) : ("UPDATE", Color.orange)
+        let (text, color): (String, Color) = {
+            switch fieldValue.operationType {
+            case .delete: return ("DELETE", Color.red)
+            case .new: return ("NEW", Color.blue)
+            case .update: return ("UPDATE", Color.orange)
+            }
+        }()
         return Text(text)
             .font(.caption2.bold())
             .foregroundStyle(color)
@@ -515,6 +616,24 @@ struct CountryFieldPreviewCard: View {
                 RoundedRectangle(cornerRadius: 4)
                     .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
             )
+            .cornerRadius(4)
+        }
+    }
+
+    // MARK: - Deletion Warning Section
+
+    private var deletionWarningSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                Text("This field will be deleted")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.red.opacity(0.1))
             .cornerRadius(4)
         }
     }

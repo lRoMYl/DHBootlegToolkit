@@ -13,10 +13,6 @@ let package = Package(
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency")
             ]
-        ),
-        .testTarget(
-            name: "JSONEditorCoreTests",
-            dependencies: ["JSONEditorCore"]
         )
     ]
 )

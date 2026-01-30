@@ -202,6 +202,54 @@ extension S3CountryConfig {
         return nil
     }
 
+    /// Deletes a field at the given path using targeted deletion.
+    public func withDeletedField(at path: [String]) -> S3CountryConfig? {
+        guard !path.isEmpty else { return nil }
+
+        // Try targeted deletion if original content exists
+        if let original = originalContent {
+            if let updatedContent = S3JSONSerializer.deleteValue(in: original, at: path) {
+                guard let data = updatedContent.data(using: .utf8) else { return nil }
+
+                var updated = self
+                updated.configData = data
+                updated.originalContent = updatedContent
+                updated.hasChanges = true
+                updated.editedPaths.insert(path.joined(separator: "."))
+                return updated
+            }
+        }
+
+        // Fallback to full JSON rebuild
+        guard var json = parseConfigJSON() else { return nil }
+        deleteValueInJSON(&json, at: path)
+
+        if var updated = withUpdatedJSON(json) {
+            updated.editedPaths.insert(path.joined(separator: "."))
+            return updated
+        }
+
+        return nil
+    }
+
+    /// Recursively deletes a value at the given path in a JSON dictionary
+    private func deleteValueInJSON(_ json: inout [String: Any], at path: [String]) {
+        guard !path.isEmpty else { return }
+
+        if path.count == 1 {
+            json.removeValue(forKey: path[0])
+            return
+        }
+
+        let key = path[0]
+        let remainingPath = Array(path.dropFirst())
+
+        if var nested = json[key] as? [String: Any] {
+            deleteValueInJSON(&nested, at: remainingPath)
+            json[key] = nested
+        }
+    }
+
     /// Helper to set a value in a nested JSON dictionary at the given path
     private func setValueInJSON(_ json: inout [String: Any], at path: [String], value: Any) {
         guard !path.isEmpty else { return }

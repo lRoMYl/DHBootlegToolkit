@@ -71,27 +71,19 @@ public actor YahooFinanceWorker {
     /// Fetch chart data for a specific time range
     public func fetchChartData(symbol: String, range: ChartTimeRange) async throws -> [ChartDataPoint] {
         let urlString = "https://query1.finance.yahoo.com/v8/finance/chart/\(symbol)?interval=\(range.apiInterval)&range=\(range.apiRange)"
-        print("[YahooFinanceWorker] Fetching chart data: \(urlString)")
 
         let url = URL(string: urlString)!
         let (data, response) = try await session.data(from: url)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            print("[YahooFinanceWorker] Invalid HTTP response")
             throw YahooFinanceError.invalidResponse
         }
-
-        print("[YahooFinanceWorker] HTTP Status: \(httpResponse.statusCode)")
 
         guard httpResponse.statusCode == 200 else {
-            print("[YahooFinanceWorker] HTTP error: \(httpResponse.statusCode)")
             throw YahooFinanceError.invalidResponse
         }
 
-        print("[YahooFinanceWorker] Parsing response for \(symbol)")
         let stockData = try parseRESTResponse(data, symbol: symbol)
-        let chartDataCount = stockData.chartData?.count ?? 0
-        print("[YahooFinanceWorker] Parsed stock data, chartData has \(chartDataCount) points")
         return stockData.chartData ?? []
     }
 
@@ -109,19 +101,12 @@ public actor YahooFinanceWorker {
     private func connect() async {
         guard !isConnected else { return }
 
-        do {
-            // Note: Yahoo Finance WebSocket endpoint may require authentication
-            // For this implementation, we'll use a fallback REST polling approach
-            // since the actual WebSocket endpoint is not publicly documented
-            print("[YahooFinanceWorker] Using REST polling fallback")
+        // Note: Yahoo Finance WebSocket endpoint may require authentication
+        // For this implementation, we'll use a fallback REST polling approach
+        // since the actual WebSocket endpoint is not publicly documented
 
-            // Start REST polling as fallback
-            await startRESTPolling()
-
-        } catch {
-            print("[YahooFinanceWorker] Failed to connect: \(error.localizedDescription)")
-            await scheduleReconnect()
-        }
+        // Start REST polling as fallback
+        await startRESTPolling()
     }
 
     private func disconnect() async {
@@ -185,7 +170,6 @@ public actor YahooFinanceWorker {
             await receiveMessage()
 
         } catch {
-            print("[YahooFinanceWorker] WebSocket receive error: \(error.localizedDescription)")
             await handleDisconnection()
         }
     }
@@ -196,14 +180,10 @@ public actor YahooFinanceWorker {
     }
 
     private func handleDataMessage(_ data: Data) async {
-        do {
-            // Parse Yahoo Finance WebSocket message format
-            // This is a placeholder - actual format depends on Yahoo's API
-            if let stockData = try? parseWebSocketMessage(data) {
-                continuation?.yield(stockData)
-            }
-        } catch {
-            print("[YahooFinanceWorker] Failed to parse message: \(error.localizedDescription)")
+        // Parse Yahoo Finance WebSocket message format
+        // This is a placeholder - actual format depends on Yahoo's API
+        if let stockData = try? parseWebSocketMessage(data) {
+            continuation?.yield(stockData)
         }
     }
 
@@ -223,9 +203,8 @@ public actor YahooFinanceWorker {
 
         do {
             try await task.send(message)
-            print("[YahooFinanceWorker] Subscribed to symbols: \(symbols.joined(separator: ", "))")
         } catch {
-            print("[YahooFinanceWorker] Failed to send subscribe message: \(error.localizedDescription)")
+            // Failed to send subscribe message
         }
     }
 
@@ -254,7 +233,6 @@ public actor YahooFinanceWorker {
                 }
             }
         } catch {
-            print("[YahooFinanceWorker] Ping failed: \(error.localizedDescription)")
             await handleDisconnection()
         }
     }
@@ -269,8 +247,6 @@ public actor YahooFinanceWorker {
     private func scheduleReconnect() async {
         let delay = calculateBackoffDelay()
         reconnectAttempt += 1
-
-        print("[YahooFinanceWorker] Reconnecting in \(delay)s (attempt \(reconnectAttempt))")
 
         try? await Task.sleep(for: .seconds(delay))
         await connect()
@@ -390,12 +366,10 @@ public actor YahooFinanceWorker {
             // Real-time data available
             currentPrice = regularMarketPrice
             previousClose = regularPreviousClose
-        } else if let timestamps = result.timestamp,
-                  let quote = result.indicators?.quote?.first,
+        } else if let quote = result.indicators?.quote?.first,
                   let closes = quote.close,
                   !closes.isEmpty {
             // Historical data only - use last available close price
-            print("[YahooFinanceWorker] Using historical close prices for \(symbol)")
             let lastIndex = closes.count - 1
             currentPrice = closes[lastIndex] ?? 0
             previousClose = lastIndex > 0 ? (closes[lastIndex - 1] ?? currentPrice) : currentPrice
@@ -417,23 +391,16 @@ public actor YahooFinanceWorker {
         // Parse historical chart data points
         let chartData: [ChartDataPoint]? = {
             guard let timestamps = result.timestamp else {
-                print("[YahooFinanceWorker] No timestamps in response for \(symbol)")
                 return nil
             }
 
             guard let quote = result.indicators?.quote?.first else {
-                print("[YahooFinanceWorker] No indicators.quote in response for \(symbol)")
-                print("[YahooFinanceWorker] Has indicators: \(result.indicators != nil)")
-                print("[YahooFinanceWorker] Quote array count: \(result.indicators?.quote?.count ?? 0)")
                 return nil
             }
 
             guard let closes = quote.close, !closes.isEmpty else {
-                print("[YahooFinanceWorker] No close prices for \(symbol)")
                 return nil
             }
-
-            print("[YahooFinanceWorker] Parsing \(timestamps.count) data points for \(symbol)")
 
             let points = timestamps.enumerated().compactMap { index, timestamp -> ChartDataPoint? in
                 guard let closePrice = closes[safe: index], let close = closePrice else {
@@ -450,7 +417,6 @@ public actor YahooFinanceWorker {
                 )
             }
 
-            print("[YahooFinanceWorker] Successfully parsed \(points.count) chart points for \(symbol)")
             return points
         }()
 
