@@ -32,6 +32,9 @@ struct S3InspectFieldSheet: View {
     @State private var inspectionValues: [CountryInspectionValue] = []
     @State private var sourceTreeViewModel = JSONTreeViewModel()
     @State private var focusCoordinator = FieldFocusCoordinator()
+    @State private var isInitializing: Bool = false
+    @State private var initializationProgress: Int = 0
+    @State private var initializationTask: Task<Void, Never>?
 
     enum WizardStep {
         case selectCountries
@@ -155,6 +158,7 @@ struct S3InspectFieldSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Button {
+                    initializationTask?.cancel()
                     step = .selectCountries
                 } label: {
                     Label("Back to Selection", systemImage: "chevron.left")
@@ -167,6 +171,46 @@ struct S3InspectFieldSheet: View {
             .padding(.horizontal)
             .padding(.top, 8)
 
+            if isInitializing {
+                loadingView
+            } else {
+                inspectionContentView
+            }
+        }
+        .onAppear {
+            if inspectionValues.isEmpty {
+                initializeInspectionValues()
+            }
+        }
+        .onDisappear {
+            initializationTask?.cancel()
+        }
+    }
+
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+
+            ProgressView(
+                value: Double(initializationProgress),
+                total: Double(selectedCountries.count)
+            )
+            .frame(maxWidth: 400)
+
+            Text("Loading countries...")
+                .font(.headline)
+
+            Text("\(initializationProgress) / \(selectedCountries.count)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var inspectionContentView: some View {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Field Values")
                     .font(.subheadline.bold())
@@ -194,11 +238,6 @@ struct S3InspectFieldSheet: View {
                     }
                 }
                 .padding()
-            }
-        }
-        .onAppear {
-            if inspectionValues.isEmpty {
-                initializeInspectionValues()
             }
         }
     }
@@ -257,21 +296,52 @@ struct S3InspectFieldSheet: View {
 
     private func initializeInspectionValues() {
         guard let fieldPath = store.selectedNodePath else { return }
+
+        isInitializing = true
+        initializationProgress = 0
+        inspectionValues = []
+
         let pathComponents = fieldPath.split(separator: ".").map(String.init)
+        let countriesArray = selectedCountries.compactMap { countryId in
+            store.countries.first(where: { $0.id == countryId })
+        }
 
-        inspectionValues = selectedCountries.compactMap { countryId in
-            guard let country = store.countries.first(where: { $0.id == countryId }),
-                  let json = country.parseConfigJSON() else { return nil }
+        initializationTask = Task {
+            var values: [CountryInspectionValue] = []
 
-            let currentValue = getValue(at: pathComponents, from: json)
-            return CountryInspectionValue(
-                id: country.id,
-                countryConfig: country,
-                fieldExists: currentValue != nil,
-                currentValue: currentValue,
-                editedValue: nil,
-                isEditing: false
-            )
+            for country in countriesArray {
+                if Task.isCancelled { break }
+
+                // Parse JSON
+                let json = country.parseConfigJSON()
+
+                guard let json = json else { continue }
+
+                // Get value
+                let currentValue = getValue(at: pathComponents, from: json)
+
+                let inspectionValue = CountryInspectionValue(
+                    id: country.id,
+                    countryConfig: country,
+                    fieldExists: currentValue != nil,
+                    currentValue: currentValue,
+                    editedValue: nil,
+                    isEditing: false
+                )
+
+                values.append(inspectionValue)
+
+                await MainActor.run {
+                    initializationProgress += 1
+                }
+            }
+
+            await MainActor.run {
+                if !Task.isCancelled {
+                    inspectionValues = values
+                }
+                isInitializing = false
+            }
         }
     }
 

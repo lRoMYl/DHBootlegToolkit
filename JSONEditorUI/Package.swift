@@ -17,10 +17,6 @@ let package = Package(
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency")
             ]
-        ),
-        .testTarget(
-            name: "JSONEditorUITests",
-            dependencies: ["JSONEditorUI"]
         )
     ]
 )

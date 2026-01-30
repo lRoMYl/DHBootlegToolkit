@@ -309,60 +309,37 @@ struct S3DetailView: View {
     // MARK: - Search Bar Section
 
     private var searchBarSection: some View {
-        HStack(spacing: 8) {
-            JSONSearchBar(
-                searchQuery: $searchQuery,
-                exactMatch: $searchExactMatch,
-                caseSensitive: $searchCaseSensitive,
-                currentMatch: searchMatches.displayIndex,
-                totalMatches: searchMatches.count,
-                onNext: { searchMatches.next() },
-                onPrevious: { searchMatches.previous() },
-                focusCoordinator: focusCoordinator
-            )
-
-            Divider()
-                .frame(height: 20)
-
-            Button {
-                focusCoordinator.clearFocus()
-                if treeViewModel.isAllExpanded {
-                    treeViewModel.collapseAllExceptRoot()
-                } else {
-                    treeViewModel.expandAll()
-                }
-            } label: {
-                Image(systemName: treeViewModel.isAllExpanded ? "chevron.down.square" : "chevron.right.square")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .help(treeViewModel.isAllExpanded ? "Collapse All" : "Expand All")
-
-            Button {
-                showChangedFieldsOnly.toggle()
-                treeViewModel.setShowChangedFieldsOnly(showChangedFieldsOnly)
-                focusCoordinator.clearFocus()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
-                    if showChangedFieldsOnly {
-                        let count = treeViewModel.countChangedFields()
-                        if count > 0 {
-                            Text("\(count)")
-                                .font(.caption2.weight(.medium).monospacedDigit())
-                        }
+        JSONEditorToolbar(
+            searchQuery: $searchQuery,
+            exactMatch: $searchExactMatch,
+            caseSensitive: $searchCaseSensitive,
+            currentMatch: searchMatches.displayIndex,
+            totalMatches: searchMatches.count,
+            onSearchNext: { searchMatches.next() },
+            onSearchPrevious: { searchMatches.previous() },
+            focusCoordinator: focusCoordinator,
+            expandCollapseConfig: ExpandCollapseConfig(
+                isExpanded: treeViewModel.isAllExpanded,
+                onToggle: {
+                    focusCoordinator.clearFocus()
+                    if treeViewModel.isAllExpanded {
+                        treeViewModel.collapseAllExceptRoot()
+                    } else {
+                        treeViewModel.expandAll()
                     }
                 }
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .tint(showChangedFieldsOnly ? .blue : .primary)
-            .background(showChangedFieldsOnly ? Color.accentColor.opacity(0.15) : Color.clear)
-            .cornerRadius(4)
-            .disabled(currentHeadJSON == nil || treeViewModel.countChangedFields() == 0)
-            .help(showChangedFieldsOnly ? "Show All Fields" : "Show Changed Fields Only")
-        }
-        .background(Color(nsColor: .controlBackgroundColor))
+            ),
+            filterConfig: FilterConfig(
+                isActive: showChangedFieldsOnly,
+                isDisabled: currentHeadJSON == nil || treeViewModel.countChangedFields() == 0,
+                count: showChangedFieldsOnly ? treeViewModel.countChangedFields() : nil,
+                onToggle: {
+                    showChangedFieldsOnly.toggle()
+                    treeViewModel.setShowChangedFieldsOnly(showChangedFieldsOnly)
+                    focusCoordinator.clearFocus()
+                }
+            )
+        )
     }
 
     // MARK: - Tree Content Section
@@ -597,7 +574,26 @@ struct S3TreeContentView: View {
                             onDeleteArrayElement: onDeleteArrayElement,
                             onMoveArrayElement: onMoveArrayElement,
                             onSelect: { path, value in
-                                store.selectNode(path: path, value: value)
+                                // Only block empty path (absolute root)
+                                guard !path.isEmpty else {
+                                    // Empty path blocked - selectNode will handle error state
+                                    store.selectNode(path: path, value: value)
+                                    return
+                                }
+
+                                // Find the node to get its deletion status and key count (for objects)
+                                if let node = treeViewModel.flattenedNodes.first(where: { $0.path == path }) {
+                                    let keyCount: Int?
+                                    // Only extract key count for objects (not arrays or primitives)
+                                    if case .object(let count) = node.nodeType {
+                                        keyCount = count
+                                    } else {
+                                        keyCount = nil
+                                    }
+                                    store.selectNode(path: path, value: value, isDeleted: node.isDeleted, keyCount: keyCount)
+                                } else {
+                                    store.selectNode(path: path, value: value)
+                                }
                             },
                             isSelected: node.id == store.selectedNodePath,
                             isReadOnly: isReadOnly,
@@ -644,6 +640,11 @@ struct S3DetailHeader: View {
                 actionButtons
             }
 
+            // Show info banner when inspection is blocked
+            if store.selectedNodePath != nil && isInspectDisabled {
+                infoSelectionBanner
+            }
+
             // Show selected path when a field is selected
             if let selectedPath = store.selectedNodePath {
                 HStack(spacing: 4) {
@@ -670,6 +671,18 @@ struct S3DetailHeader: View {
         .background(Color(nsColor: .controlBackgroundColor))
     }
 
+    private var infoSelectionBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "info.circle")
+            Text(inspectionDisabledReason)
+                .font(.caption)
+            Spacer()
+        }
+        .padding(8)
+        .background(Color.blue.opacity(0.1))
+        .cornerRadius(6)
+    }
+
     private var countryInfoView: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(country.countryName)
@@ -690,17 +703,37 @@ struct S3DetailHeader: View {
         }
     }
 
-    /// Returns true if the selected node path contains an array index (numeric path component)
-    /// e.g., "hidden_form_fields.[0]" or "items.[1].name" would return true
-    private var isArrayElementSelected: Bool {
-        guard let path = store.selectedNodePath else { return false }
-        let components = path.split(separator: ".")
-        return components.contains { component in
-            // Strip brackets to handle both "[0]" and "0" formats
-            let stripped = String(component).replacingOccurrences(of: "[", with: "")
-                                            .replacingOccurrences(of: "]", with: "")
-            return Int(stripped) != nil
+    /// Returns true if the selected node is invalid for inspection/apply operations
+    /// Blocks: empty path (root) or objects with too many keys
+    private var isInspectDisabled: Bool {
+        guard let path = store.selectedNodePath else { return true }
+
+        // Block empty path (absolute root)
+        if path.isEmpty { return true }
+
+        // Block objects with too many keys
+        if let keyCount = store.selectedNodeKeyCount,
+           keyCount > S3EditorConfiguration.maxInspectableObjectKeys {
+            return true
         }
+
+        return false
+    }
+
+    /// Returns the appropriate help text based on why inspection is disabled
+    private var inspectionDisabledReason: String {
+        guard let path = store.selectedNodePath else { return "" }
+
+        if path.isEmpty {
+            return S3EditorConfiguration.InspectionError.absoluteRoot
+        }
+
+        if let keyCount = store.selectedNodeKeyCount,
+           keyCount > S3EditorConfiguration.maxInspectableObjectKeys {
+            return S3EditorConfiguration.InspectionError.tooManyKeys(count: keyCount)
+        }
+
+        return ""
     }
 
     private var actionButtons: some View {
@@ -711,7 +744,8 @@ struct S3DetailHeader: View {
             } label: {
                 Label("Inspect Field", systemImage: "eye.circle")
             }
-            .disabled(store.selectedNodePath == nil || isArrayElementSelected)
+            .disabled(isInspectDisabled)
+            .help(isInspectDisabled && store.selectedNodePath != nil ? inspectionDisabledReason : "")
             .buttonStyle(.bordered)
 
             // Batch Update button - hidden when read-only
@@ -721,7 +755,8 @@ struct S3DetailHeader: View {
                 } label: {
                     Label("Batch Update", systemImage: "square.on.square")
                 }
-                .disabled(store.selectedNodePath == nil || isArrayElementSelected)
+                .disabled(isInspectDisabled)
+                .help(isInspectDisabled && store.selectedNodePath != nil ? inspectionDisabledReason : "")
                 .buttonStyle(.bordered)
             }
 

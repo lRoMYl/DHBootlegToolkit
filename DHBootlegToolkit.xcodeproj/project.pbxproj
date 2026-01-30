@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -27,32 +27,16 @@
 
 /* Begin PBXFileReference section */
 		134AB6E4966C19E0594957A5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Assets.xcassets; path = DHBootlegToolkit/Assets.xcassets; sourceTree = SOURCE_ROOT; };
-		248DC153D483C15EB8592547 /* JSONEditorCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JSONEditorCore; path = JSONEditorCore; sourceTree = SOURCE_ROOT; };
-		6F8A82950112E96AAA92A826 /* JSONEditorUI */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JSONEditorUI; path = JSONEditorUI; sourceTree = SOURCE_ROOT; };
+		248DC153D483C15EB8592547 /* JSONEditorCore */ = {isa = PBXFileReference; lastKnownFileType = folder; path = JSONEditorCore; sourceTree = SOURCE_ROOT; };
+		6F8A82950112E96AAA92A826 /* JSONEditorUI */ = {isa = PBXFileReference; lastKnownFileType = folder; path = JSONEditorUI; sourceTree = SOURCE_ROOT; };
 		785077D8848C697F302ECB92 /* DHBootlegToolkit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DHBootlegToolkit.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		BAA2DCA7F7056296BC5693CD /* DHBootlegToolkitCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = DHBootlegToolkitCore; path = DHBootlegToolkitCore; sourceTree = SOURCE_ROOT; };
+		BAA2DCA7F7056296BC5693CD /* DHBootlegToolkitCore */ = {isa = PBXFileReference; lastKnownFileType = folder; path = DHBootlegToolkitCore; sourceTree = SOURCE_ROOT; };
 		FFC14A82C043842B140C07FD /* DHBootlegToolkitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DHBootlegToolkitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		3AA772A3E8399CFAEDC4BCB0 /* DHBootlegToolkit */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = DHBootlegToolkit;
-			sourceTree = "<group>";
-		};
-		A8F44DA43F2C720675EC1F0A /* DHBootlegToolkitTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = DHBootlegToolkitTests;
-			sourceTree = "<group>";
-		};
+		3AA772A3E8399CFAEDC4BCB0 /* DHBootlegToolkit */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = DHBootlegToolkit; sourceTree = "<group>"; };
+		A8F44DA43F2C720675EC1F0A /* DHBootlegToolkitTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = DHBootlegToolkitTests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -203,7 +187,6 @@
 				1399648C5813965D836C5757 /* XCLocalSwiftPackageReference "JSONEditorCore" */,
 				A2FE12BD512058850EEC7FCF /* XCLocalSwiftPackageReference "JSONEditorUI" */,
 			);
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (

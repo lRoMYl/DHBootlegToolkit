@@ -56,6 +56,166 @@ public enum S3JSONSerializer {
         return result
     }
 
+    /// Deletes a value at the specified path in the original JSON string.
+    /// This ensures minimal git diffs by only removing the specific field.
+    /// - Parameters:
+    ///   - originalContent: The original JSON file content
+    ///   - path: The path components to the value (e.g., ["features", "darkMode"])
+    /// - Returns: The modified JSON content, or nil if the path doesn't exist
+    public static func deleteValue(in originalContent: String, at path: [String]) -> String? {
+        guard !path.isEmpty else { return nil }
+
+        // Find the range of the key-value pair to delete
+        guard let valueRange = findValueRange(in: originalContent, at: path) else {
+            return nil
+        }
+
+        // Find the key before the value
+        guard let keyRange = findKeyRange(in: originalContent, beforeValue: valueRange, key: path.last!) else {
+            return nil
+        }
+
+        // Determine the full range to delete (including key, colon, value, and comma/newline)
+        let deleteRange = findFullDeletionRange(
+            in: originalContent,
+            keyRange: keyRange,
+            valueRange: valueRange
+        )
+
+        // Remove the range
+        var result = originalContent
+        result.removeSubrange(deleteRange)
+
+        return result
+    }
+
+    /// Finds the character range of the key (including quotes) that precedes the value.
+    private static func findKeyRange(
+        in content: String,
+        beforeValue valueRange: Range<String.Index>,
+        key: String
+    ) -> Range<String.Index>? {
+        var searchIndex = valueRange.lowerBound
+
+        // Search backwards for the key
+        while searchIndex > content.startIndex {
+            searchIndex = content.index(before: searchIndex)
+            let char = content[searchIndex]
+
+            // Look for the key pattern: "key"
+            if char == "\"" {
+                // Check if this might be the closing quote of our key
+                guard let keyStart = findKeyStart(in: content, endingAt: searchIndex) else {
+                    continue
+                }
+
+                let keyContent = String(content[content.index(after: keyStart)..<searchIndex])
+                if keyContent == key {
+                    // Verify this is followed by a colon and then our value
+                    var afterKey = content.index(after: searchIndex)
+                    while afterKey < content.endIndex && content[afterKey].isWhitespace {
+                        afterKey = content.index(after: afterKey)
+                    }
+                    if afterKey < content.endIndex && content[afterKey] == ":" {
+                        return keyStart..<content.index(after: searchIndex)
+                    }
+                }
+            }
+        }
+
+        return nil
+    }
+
+    /// Finds the starting quote of a key, searching backwards from the ending quote.
+    private static func findKeyStart(in content: String, endingAt endQuote: String.Index) -> String.Index? {
+        var index = endQuote
+        var escapeNext = false
+
+        while index > content.startIndex {
+            index = content.index(before: index)
+            let char = content[index]
+
+            if escapeNext {
+                escapeNext = false
+                continue
+            }
+
+            if char == "\\" {
+                escapeNext = true
+                continue
+            }
+
+            if char == "\"" {
+                return index
+            }
+        }
+
+        return nil
+    }
+
+    /// Finds the full range to delete, including key, colon, value, and trailing comma/newline.
+    private static func findFullDeletionRange(
+        in content: String,
+        keyRange: Range<String.Index>,
+        valueRange: Range<String.Index>
+    ) -> Range<String.Index> {
+        var start = keyRange.lowerBound
+        var end = valueRange.upperBound
+
+        // Check for leading whitespace/newline before the key
+        var beforeKey = start
+        while beforeKey > content.startIndex {
+            let prevIndex = content.index(before: beforeKey)
+            let char = content[prevIndex]
+            if char.isWhitespace {
+                beforeKey = prevIndex
+            } else {
+                break
+            }
+        }
+
+        // Check for trailing comma and whitespace after the value
+        var afterValue = end
+        var foundComma = false
+        while afterValue < content.endIndex {
+            let char = content[afterValue]
+            if char == "," && !foundComma {
+                foundComma = true
+                afterValue = content.index(after: afterValue)
+            } else if char.isWhitespace {
+                afterValue = content.index(after: afterValue)
+            } else {
+                break
+            }
+        }
+
+        // If we found a trailing comma, include everything up to the next non-whitespace
+        if foundComma {
+            end = afterValue
+            // Also check if we should include the line before
+            start = beforeKey
+        } else {
+            // No trailing comma - might be the last element
+            // Check for a comma before the key
+            var beforeWhitespace = beforeKey
+            while beforeWhitespace > content.startIndex {
+                let prevIndex = content.index(before: beforeWhitespace)
+                let char = content[prevIndex]
+                if char == "," {
+                    start = prevIndex
+                    break
+                } else if char.isWhitespace {
+                    beforeWhitespace = prevIndex
+                } else {
+                    break
+                }
+            }
+            end = afterValue
+        }
+
+        return start..<end
+    }
+
     // MARK: - Indentation Detection
 
     /// Detects the indentation unit used in the original JSON content.

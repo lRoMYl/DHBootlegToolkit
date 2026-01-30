@@ -67,13 +67,11 @@ struct S3FeatureConfigBrowserView: View {
                     Section {
                         EmptyView()
                     } header: {
-                        HStack {
+                        VStack(alignment: .leading, spacing: 8) {
                             Text("Environment")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .textCase(nil)
-
-                            Spacer()
 
                             S3EnvironmentToggle()
                         }

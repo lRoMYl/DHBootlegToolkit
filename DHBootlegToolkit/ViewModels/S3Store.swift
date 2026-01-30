@@ -307,11 +307,20 @@ final class S3Store {
     /// Currently selected node value
     var selectedNodeValue: Any?
 
+    /// Whether the currently selected node is deleted
+    var selectedNodeIsDeleted: Bool = false
+
+    /// Number of keys for the currently selected node (only set for objects)
+    var selectedNodeKeyCount: Int?
+
     /// Whether to show the apply field sheet
     var showApplyFieldSheet: Bool = false
 
     /// Whether to show the inspect field sheet
     var showInspectFieldSheet: Bool = false
+
+    /// Error message when node selection is invalid (e.g., root-level fields)
+    var selectionError: String? = nil
 
     // MARK: - Computed Properties
 
@@ -1200,15 +1209,29 @@ final class S3Store {
     // MARK: - Field Selection Operations (for Batch Update)
 
     /// Selects a node in the JSON tree for applying to other countries
-    func selectNode(path: [String], value: Any) {
+    func selectNode(path: [String], value: Any, isDeleted: Bool = false, keyCount: Int? = nil) {
+        // Reject empty path (absolute root) which returns entire JSON
+        guard !path.isEmpty else {
+            selectionError = S3EditorConfiguration.InspectionError.absoluteRoot
+            return
+        }
+
+        // Clear any previous error
+        selectionError = nil
+
         selectedNodePath = path.joined(separator: ".")
         selectedNodeValue = value
+        selectedNodeIsDeleted = isDeleted
+        selectedNodeKeyCount = keyCount
     }
 
     /// Clears the current node selection
     func clearNodeSelection() {
         selectedNodePath = nil
         selectedNodeValue = nil
+        selectedNodeIsDeleted = false
+        selectedNodeKeyCount = nil
+        selectionError = nil
     }
 
     /// Starts the apply field wizard with the currently selected node
@@ -1587,9 +1610,16 @@ extension S3Store: GitPublishable {
 
         let value = getValue(at: error.path, from: json)
 
-        // 3. Select the node
+        // 3. Select the node with key count for objects
         if let value = value {
-            selectNode(path: error.path, value: value)
+            let keyCount: Int?
+            if let node = treeViewModel.flattenedNodes.first(where: { $0.path == error.path }),
+               case .object(let count) = node.nodeType {
+                keyCount = count
+            } else {
+                keyCount = nil
+            }
+            selectNode(path: error.path, value: value, keyCount: keyCount)
         }
 
         // 4. Scroll to the node with animation
