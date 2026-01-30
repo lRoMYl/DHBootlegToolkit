@@ -7,7 +7,7 @@ struct S3SheetEnvironmentSelector: View {
     let onChange: (S3Environment) async -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("Target Environment:")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)

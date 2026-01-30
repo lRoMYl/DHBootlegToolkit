@@ -309,58 +309,37 @@ struct S3DetailView: View {
     // MARK: - Search Bar Section
 
     private var searchBarSection: some View {
-        HStack(spacing: 8) {
-            JSONSearchBar(
-                searchQuery: $searchQuery,
-                currentMatch: searchMatches.displayIndex,
-                totalMatches: searchMatches.count,
-                onNext: { searchMatches.next() },
-                onPrevious: { searchMatches.previous() },
-                focusCoordinator: focusCoordinator
-            )
-
-            Divider()
-                .frame(height: 20)
-
-            Button {
-                focusCoordinator.clearFocus()
-                if treeViewModel.isAllExpanded {
-                    treeViewModel.collapseAllExceptRoot()
-                } else {
-                    treeViewModel.expandAll()
-                }
-            } label: {
-                Image(systemName: treeViewModel.isAllExpanded ? "chevron.down.square" : "chevron.right.square")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .help(treeViewModel.isAllExpanded ? "Collapse All" : "Expand All")
-
-            Button {
-                showChangedFieldsOnly.toggle()
-                treeViewModel.setShowChangedFieldsOnly(showChangedFieldsOnly)
-                focusCoordinator.clearFocus()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
-                    if showChangedFieldsOnly {
-                        let count = treeViewModel.countChangedFields()
-                        if count > 0 {
-                            Text("\(count)")
-                                .font(.caption2.weight(.medium).monospacedDigit())
-                        }
+        JSONEditorToolbar(
+            searchQuery: $searchQuery,
+            exactMatch: $searchExactMatch,
+            caseSensitive: $searchCaseSensitive,
+            currentMatch: searchMatches.displayIndex,
+            totalMatches: searchMatches.count,
+            onSearchNext: { searchMatches.next() },
+            onSearchPrevious: { searchMatches.previous() },
+            focusCoordinator: focusCoordinator,
+            expandCollapseConfig: ExpandCollapseConfig(
+                isExpanded: treeViewModel.isAllExpanded,
+                onToggle: {
+                    focusCoordinator.clearFocus()
+                    if treeViewModel.isAllExpanded {
+                        treeViewModel.collapseAllExceptRoot()
+                    } else {
+                        treeViewModel.expandAll()
                     }
                 }
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .tint(showChangedFieldsOnly ? .blue : .primary)
-            .background(showChangedFieldsOnly ? Color.accentColor.opacity(0.15) : Color.clear)
-            .cornerRadius(4)
-            .disabled(currentHeadJSON == nil || treeViewModel.countChangedFields() == 0)
-            .help(showChangedFieldsOnly ? "Show All Fields" : "Show Changed Fields Only")
-        }
-        .background(Color(nsColor: .controlBackgroundColor))
+            ),
+            filterConfig: FilterConfig(
+                isActive: showChangedFieldsOnly,
+                isDisabled: currentHeadJSON == nil || treeViewModel.countChangedFields() == 0,
+                count: showChangedFieldsOnly ? treeViewModel.countChangedFields() : nil,
+                onToggle: {
+                    showChangedFieldsOnly.toggle()
+                    treeViewModel.setShowChangedFieldsOnly(showChangedFieldsOnly)
+                    focusCoordinator.clearFocus()
+                }
+            )
+        )
     }
 
     // MARK: - Tree Content Section

@@ -5,6 +5,8 @@ import SwiftUI
 /// Search bar with text editor-style navigation (next/prev buttons)
 public struct JSONSearchBar: View {
     @Binding var searchQuery: String
+    @Binding var exactMatch: Bool
+    @Binding var caseSensitive: Bool
     let currentMatch: Int
     let totalMatches: Int
     let onNext: () -> Void
@@ -14,6 +16,8 @@ public struct JSONSearchBar: View {
 
     public init(
         searchQuery: Binding<String>,
+        exactMatch: Binding<Bool>,
+        caseSensitive: Binding<Bool>,
         currentMatch: Int,
         totalMatches: Int,
         onNext: @escaping () -> Void,
@@ -21,6 +25,8 @@ public struct JSONSearchBar: View {
         focusCoordinator: FieldFocusCoordinator
     ) {
         self._searchQuery = searchQuery
+        self._exactMatch = exactMatch
+        self._caseSensitive = caseSensitive
         self.currentMatch = currentMatch
         self.totalMatches = totalMatches
         self.onNext = onNext
@@ -29,9 +35,11 @@ public struct JSONSearchBar: View {
     }
 
     public var body: some View {
-        HStack(spacing: 8) {
+        Group {
             Image(systemName: "magnifyingglass")
+                .imageScale(.small)
                 .foregroundStyle(.secondary)
+                .frame(width: 12, height: 12)
 
             TextField("Search keys...", text: $searchQuery)
                 .textFieldStyle(.plain)
@@ -41,11 +49,23 @@ public struct JSONSearchBar: View {
                 matchCounterView
                 navigationButtons
                 clearButton
+
+                Divider()
+                    .frame(height: 20)
+
+                Toggle("Aa", isOn: $caseSensitive)
+                    .font(.caption)
+                    .toggleStyle(.button)
+                    .controlSize(.small)
+                    .help("Case sensitive search")
+
+                Toggle("exact", isOn: $exactMatch)
+                    .font(.caption)
+                    .toggleStyle(.button)
+                    .controlSize(.small)
+                    .help("Exact match")
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color(nsColor: .controlBackgroundColor))
         .onChange(of: focusCoordinator.focusedField) { _, newValue in
             localFocus = newValue
         }
@@ -68,15 +88,14 @@ public struct JSONSearchBar: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .padding(.horizontal, 6)
-                .padding(.vertical, 2)
                 .background(Color.secondary.opacity(0.1))
                 .cornerRadius(4)
         } else {
             Text("No matches")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .monospacedDigit()
                 .padding(.horizontal, 6)
-                .padding(.vertical, 2)
                 .background(Color.secondary.opacity(0.1))
                 .cornerRadius(4)
         }
@@ -86,7 +105,9 @@ public struct JSONSearchBar: View {
         HStack(spacing: 4) {
             Button(action: onPrevious) {
                 Image(systemName: "chevron.up")
-                    .font(.caption.weight(.semibold))
+                    .imageScale(.small)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 12, height: 12)
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -94,7 +115,9 @@ public struct JSONSearchBar: View {
 
             Button(action: onNext) {
                 Image(systemName: "chevron.down")
-                    .font(.caption.weight(.semibold))
+                    .imageScale(.small)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 12, height: 12)
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -107,8 +130,11 @@ public struct JSONSearchBar: View {
             searchQuery = ""
         } label: {
             Image(systemName: "xmark.circle.fill")
+                .imageScale(.small)
                 .foregroundStyle(.secondary)
+                .frame(width: 12, height: 12)
         }
         .buttonStyle(.plain)
+        .controlSize(.small)
     }
 }

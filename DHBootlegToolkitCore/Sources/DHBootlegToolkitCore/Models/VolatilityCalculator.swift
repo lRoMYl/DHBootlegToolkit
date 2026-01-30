@@ -115,10 +115,6 @@ public struct VolatilityCalculator {
 
         // Validate sufficient data points
         guard chartData.count >= minDataPoints else {
-            #if DEBUG
-            print("[VolatilityCalculator] Insufficient data: \(chartData.count) < \(minDataPoints)")
-            #endif
-
             return DynamicThreshold(
                 moonshot: 5.0,
                 gainsLower: 1.0,
@@ -137,10 +133,6 @@ public struct VolatilityCalculator {
         let returns = calculateDailyReturns(from: chartData)
 
         guard !returns.isEmpty else {
-            #if DEBUG
-            print("[VolatilityCalculator] No valid returns calculated")
-            #endif
-
             return DynamicThreshold(
                 moonshot: 5.0,
                 gainsLower: 1.0,
@@ -184,25 +176,6 @@ public struct VolatilityCalculator {
                 volatilityRatio: boundedRatio
             )
         )
-
-        #if DEBUG
-        print("""
-        [VolatilityCalculator] Dynamic thresholds calculated:
-          - Time range: \(timeRange.rawValue)
-          - Data points: \(chartData.count)
-          - Daily volatility: \(String(format: "%.2f%%", stdDev * 100))
-          - Annual volatility: \(String(format: "%.1f%%", annualizedVol * 100))
-          - Baseline: \(String(format: "%.1f%%", baselineVolatility * 100))
-          - Raw ratio: \(String(format: "%.2fx", rawRatio))
-          - Bounded ratio: \(String(format: "%.2fx", boundedRatio))
-
-          Thresholds:
-          - Moonshot: ≥\(String(format: "%.2f%%", thresholds.moonshot))
-          - Gains: \(String(format: "%.2f%%", thresholds.gainsLower)) to \(String(format: "%.2f%%", thresholds.gainsUpper))
-          - Flat: \(String(format: "%.2f%%", thresholds.flatLower)) to \(String(format: "%.2f%%", thresholds.flatUpper))
-          - Losses: \(String(format: "%.2f%%", thresholds.lossesLower)) to \(String(format: "%.2f%%", thresholds.crash))
-        """)
-        #endif
 
         return thresholds
     }
