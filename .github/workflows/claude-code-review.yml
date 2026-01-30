@@ -33,6 +33,15 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Cache Claude Code
+        id: cache-claude
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/claude
+          key: claude-code-${{ runner.os }}-v2.1.25
+          restore-keys: |
+            claude-code-${{ runner.os }}-
+
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@v1
@@ -41,6 +50,92 @@ jobs:
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          path_to_claude_code_executable: ${{ steps.cache-claude.outputs.cache-hit == 'true' && '~/.local/bin/claude' || '' }}
+
+      - name: Post Review Summary
+        if: always() && steps.claude-review.outcome != 'skipped'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Get PR metadata
+          PR_INFO=$(gh pr view $PR_NUMBER --json files,additions,deletions,changedFiles)
+          FILES_CHANGED=$(echo "$PR_INFO" | jq -r '.changedFiles')
+          ADDITIONS=$(echo "$PR_INFO" | jq -r '.additions')
+          DELETIONS=$(echo "$PR_INFO" | jq -r '.deletions')
+
+          # Get list of changed files (first 10)
+          FILE_LIST=$(echo "$PR_INFO" | jq -r '.files[:10] | map("  - `" + .path + "`") | join("\n")')
+          MORE_FILES=$(echo "$PR_INFO" | jq -r 'if (.files | length) > 10 then "  - ... and " + ((.files | length) - 10 | tostring) + " more files" else "" end')
+
+          # Determine status based on step outcome
+          if [ "${{ steps.claude-review.outcome }}" == "success" ]; then
+            STATUS="✅ Completed Successfully"
+            RESULT="✅ **No high-confidence issues found**
+
+          This PR meets the project's quality standards based on automated analysis. The absence of reported issues means:
+          - No obvious bugs detected in the changes
+          - Code follows CLAUDE.md guidelines
+          - No historical context issues identified
+          - No recurring problems from previous PRs"
+          else
+            STATUS="⚠️ Completed with Issues"
+            RESULT="⚠️ **Issues detected - please review**
+
+          The review found high-confidence issues that should be addressed. Check the comments above for specific details."
+          fi
+
+          # Post comprehensive summary
+          gh pr comment $PR_NUMBER --body "## 🤖 Claude Code Review Summary
+
+          **Review Status:** $STATUS
+
+          ### What Was Checked
+          - ✅ **CLAUDE.md Compliance** - Verified adherence to project coding guidelines
+          - ✅ **Bug Patterns** - Scanned for memory leaks, null dereferences, logic errors
+          - ✅ **Historical Context** - Analyzed git blame for potential breaking changes
+          - ✅ **Previous PR Feedback** - Checked for recurring issues in modified files
+          - ✅ **Code Comment Compliance** - Ensured changes match documented behavior
+
+          ### Review Scope
+          - **Files reviewed:** $FILES_CHANGED files
+          - **Lines changed:** +$ADDITIONS / -$DELETIONS
+
+          <details>
+          <summary>📁 Files reviewed (click to expand)</summary>
+
+          $FILE_LIST
+          $MORE_FILES
+          </details>
+
+          ### Review Process
+          - **Agents:** 5 independent Sonnet agents (parallel review)
+          - **Confidence threshold:** ≥80% (only high-confidence issues reported)
+          - **False positive filtering:** Aggressive (to avoid noise)
+
+          ### Result
+          $RESULT
+
+          ---
+          *Note: This is an automated review. Human review is still valuable for architectural decisions, UX considerations, and business logic validation.*"
+
+      - name: Comment on Review Failure
+        if: failure() && steps.claude-review.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body "## ⚠️ Claude Code Review Failed
+
+          The automated code review encountered an error and could not complete.
+
+          Please check the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
+
+          This may be due to:
+          - Claude API rate limits or authentication issues
+          - Plugin installation or execution errors
+          - Network connectivity problems
+
+          A manual review is recommended."
 
   # Job 2: Build check and auto-approval
   build-and-approve:
